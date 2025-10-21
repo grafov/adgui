@@ -54,6 +54,11 @@ lint:
 tidy:
 	$(GOMOD) tidy
 
+
+.PHONY: install
+install:
+	install ./build/$(APP) /usr/local/bin
+
 .PHONY: sloc
 sloc:
 	cloc * >sloc.stats

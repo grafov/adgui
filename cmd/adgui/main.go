@@ -1,6 +1,8 @@
 package main
 
 import (
+	"adgui/theme"
+	_ "embed"
 	"fmt"
 	"image/color"
 	"os"
@@ -44,22 +46,29 @@ type VPNManager struct {
 	isConnected  bool
 	mutex        sync.RWMutex
 	statusTicker *time.Ticker
+	updateChan   chan bool
 }
 
 func main() {
 	myApp := app.NewWithID("AdGuard VPN Client")
-	myApp.SetIcon(getDefaultIcon())
+	myApp.SetIcon(theme.DisconnectedIcon)
 
 	if desk, ok := myApp.(desktop.App); ok {
 		vpnManager := &VPNManager{
-			app:     myApp,
-			deskApp: desk,
+			app:        myApp,
+			deskApp:    desk,
+			updateChan: make(chan bool, 1),
 		}
 		vpnManager.createTrayMenu()
-		vpnManager.updateTrayIcon()
 
 		// Запуск фоновой проверки статуса
 		go vpnManager.startStatusChecker()
+		go func() {
+			for range vpnManager.updateChan {
+				vpnManager.updateTrayIcon()
+				vpnManager.updateMenuItems()
+			}
+		}()
 
 		myApp.Run()
 	} else {
@@ -80,7 +89,7 @@ func (v *VPNManager) createTrayMenu() {
 		v.disconnect()
 	})
 
-	v.menu = fyne.NewMenu("AdGuard VPN",
+	v.menu = fyne.NewMenu("AdGuard VPN Client",
 		connectAuto,
 		connectTo,
 		fyne.NewMenuItemSeparator(),
@@ -88,7 +97,6 @@ func (v *VPNManager) createTrayMenu() {
 	)
 
 	v.deskApp.SetSystemTrayMenu(v.menu)
-	v.updateMenuItems()
 }
 
 func (v *VPNManager) updateMenuItems() {
@@ -102,7 +110,16 @@ func (v *VPNManager) updateMenuItems() {
 			items[0].Disabled = v.isConnected  // Connect Auto
 			items[1].Disabled = v.isConnected  // Connect To...
 			items[3].Disabled = !v.isConnected // Disconnect
+			v.menu.Items = items
 		}
+		if v.isConnected {
+			v.menu.Label = "VPN connected"
+		} else {
+			v.menu.Label = "VPN disconected"
+		}
+		fyne.Do(func() {
+			v.deskApp.SetSystemTrayMenu(v.menu)
+		})
 	}
 }
 
@@ -110,21 +127,13 @@ func (v *VPNManager) updateTrayIcon() {
 	v.mutex.RLock()
 	defer v.mutex.RUnlock()
 
-	var trayColor color.Color
-	// var tooltip string // TODO: Использовать для установки tooltip
-
-	if v.isConnected {
-		trayColor = ConnectedColor
-		// tooltip = v.location
-	} else if strings.Contains(v.status, statusDisconnected) {
-		trayColor = WarningColor
-		// tooltip = "VPN disconnected"
-	} else {
-		trayColor = DisconnectedColor
-		// tooltip = "VPN disconnected"
-	}
-
-	v.deskApp.SetSystemTrayIcon(getColoredIcon(trayColor))
+	fyne.Do(func() {
+		if v.isConnected {
+			v.deskApp.SetSystemTrayIcon(theme.ConnectedIcon)
+		} else {
+			v.deskApp.SetSystemTrayIcon(theme.DisconnectedIcon)
+		}
+	})
 	// TODO: Установить tooltip для иконки в трее (если доступно)
 }
 
@@ -151,8 +160,8 @@ func (v *VPNManager) connectAuto() {
 			v.mutex.Lock()
 			v.isConnected = true
 			// Извлекаем название локации из вывода
-			lines := strings.Split(output, "\n")
-			for _, line := range lines {
+			lines := strings.SplitSeq(output, "\n")
+			for line := range lines {
 				if strings.Contains(line, statusConnectedTo) {
 					parts := strings.Split(line, statusConnectedTo)
 					if len(parts) > 1 {
@@ -163,8 +172,10 @@ func (v *VPNManager) connectAuto() {
 			}
 			v.mutex.Unlock()
 
-			v.updateMenuItems()
-			v.updateTrayIcon()
+			select {
+			case v.updateChan <- true:
+			default:
+			}
 		}
 	}()
 }
@@ -287,8 +298,10 @@ func (v *VPNManager) connectToLocation(city string) {
 		v.location = city
 		v.mutex.Unlock()
 
-		v.updateMenuItems()
-		v.updateTrayIcon()
+		select {
+		case v.updateChan <- true:
+		default:
+		}
 	}
 }
 
@@ -306,27 +319,26 @@ func (v *VPNManager) disconnect() {
 		v.status = statusDisconnected
 		v.mutex.Unlock()
 
-		v.updateMenuItems()
-		v.updateTrayIcon()
+		select {
+		case v.updateChan <- true:
+		default:
+		}
 	}()
 }
 
 func (v *VPNManager) startStatusChecker() {
-	time.Sleep(3 * time.Second) // Начальная задержка 3 секунды
+	time.Sleep(2 * time.Second) // Начальная задержка 3 секунды
+	v.checkStatus()
 
-	v.statusTicker = time.NewTicker(15 * time.Second)
+	// Regular checks
+	v.statusTicker = time.NewTicker(10 * time.Second)
 	defer v.statusTicker.Stop()
-
 	for range v.statusTicker.C {
 		v.checkStatus()
 	}
 }
 
 func (v *VPNManager) checkStatus() {
-	if !v.isConnected {
-		return
-	}
-
 	output, err := v.executeCommand("status")
 	if err != nil {
 		fmt.Printf("Status check error: %v\n", err)
@@ -342,31 +354,25 @@ func (v *VPNManager) checkStatus() {
 		v.mutex.Lock()
 		v.isConnected = false
 		v.location = ""
+		fmt.Printf("status check: disconnected")
 		v.mutex.Unlock()
 	} else if strings.Contains(output, "Connected to") {
 		// Извлекаем название локации из статуса
-		lines := strings.Split(output, "\n")
-		for _, line := range lines {
+		lines := strings.SplitSeq(output, "\n")
+		for line := range lines {
 			if strings.Contains(line, "Connected to") {
 				v.mutex.Lock()
 				v.location = strings.TrimSpace(line)
+				v.isConnected = true
+				fmt.Printf("status check: connected to %s", v.location)
 				v.mutex.Unlock()
 				break
 			}
 		}
 	}
 
-	v.updateMenuItems()
-	v.updateTrayIcon()
-}
-
-// Вспомогательные функции для создания иконок
-func getDefaultIcon() fyne.Resource {
-	// Используем встроенную иконку из темы
-	return fyne.CurrentApp().Settings().Theme().Icon("settings")
-}
-
-func getColoredIcon(c color.Color) fyne.Resource {
-	// Используем ту же иконку
-	return getDefaultIcon()
+	select {
+	case v.updateChan <- true:
+	default:
+	}
 }

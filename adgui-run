@@ -1,0 +1,6 @@
+#!/bin/dash
+# Run only one instance per time. Restart when another instance found.
+#
+pid=`ps x |grep /usr/local/bin/adgui| awk '{print $1}'`
+kill $pid
+/usr/local/bin/adgui $@
