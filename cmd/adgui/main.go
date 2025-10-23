@@ -224,8 +224,8 @@ func (v *VPNManager) showLocationSelector(locations []locations.Location) {
 				label.TextStyle.Bold = true
 				return
 			}
-			loc := locations[id.Row]
 
+			loc := locations[id.Row]
 			switch id.Col {
 			case 0:
 				label.SetText(loc.ISO)
@@ -236,6 +236,7 @@ func (v *VPNManager) showLocationSelector(locations []locations.Location) {
 			case 3:
 				label.SetText(strconv.Itoa(loc.Ping))
 			}
+			label.TextStyle.Bold = false
 		},
 	)
 

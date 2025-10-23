@@ -25,6 +25,14 @@ all: build
 build:
 	$(foreach dir,$(wildcard cmd/*), $(GOBUILD) $(LDFLAGS) -o $(BINDIR)/ ./$(dir);)
 
+.PHONY: release-wayland
+release-wayland: # default build for Wayland
+	go tool fyne build -o build/adgui --release --tags wayland ./cmd/adgui
+
+.PHONY: release-x11
+release-x11: # build for X11/XLibre
+	go tool fyne build -o build/adgui-x11 --release --tags x11 ./cmd/adgui
+
 .PHONY: test
 test:
 	go tool ginkgo ./...
@@ -35,7 +43,7 @@ clean:
 	rm -rf $(BINDIR)
 
 .PHONY: run
-run: build
+run: build/adgui
 	./$(BINDIR)/$(APP)
 
 .PHONY: run-log
@@ -53,7 +61,6 @@ lint:
 .PHONY: tidy
 tidy:
 	$(GOMOD) tidy
-
 
 .PHONY: install
 install:
