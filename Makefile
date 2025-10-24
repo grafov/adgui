@@ -43,7 +43,7 @@ clean:
 	rm -rf $(BINDIR)
 
 .PHONY: run
-run: build/adgui
+run: build
 	./$(BINDIR)/$(APP)
 
 .PHONY: run-log

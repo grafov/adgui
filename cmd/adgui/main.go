@@ -104,7 +104,7 @@ func (v *VPNManager) updateMenuItems() {
 		items := v.menu.Items
 		if len(items) >= 3 {
 			items[0].Disabled = v.isConnected  // Connect Auto
-			items[1].Disabled = v.isConnected  // Connect To...
+			items[1].Disabled = false          // Connect To... available always
 			items[3].Disabled = !v.isConnected // Disconnect
 			v.menu.Items = items
 		}
@@ -145,31 +145,32 @@ func (v *VPNManager) executeCommand(args ...string) (string, error) {
 }
 
 func (v *VPNManager) connectAuto() {
-	go func() {
-		// Получаем список локаций
-		output, err := v.executeCommand("list-locations")
-		if err != nil {
-			fmt.Printf("List locations error: %v\nOutput: %s\n", err, output)
-			return
-		}
+	// Получаем список локаций
+	output, err := v.executeCommand("connect")
+	if err != nil {
+		fmt.Printf("Could not connect: %s: %s\n", err, output)
+		// Раз что-то пошло не так, на всякий случай стоит подождать, перед
+		// новой попыткой коннекта.
+		time.Sleep(1 * time.Second)
+	}
 
-		// Парсим список локаций
-		actualLocations := locations.ParseLocations(output)
-		if len(actualLocations) == 0 {
-			fmt.Println("No locations found for auto-connect")
-			return
-		}
+	// Идём альтернативным путём.
+	// Парсим список локаций и выбираем самую быструю, для коннекта к ней.
+	actualLocations := locations.ParseLocations(output)
+	if len(actualLocations) == 0 {
+		fmt.Println("No locations found for auto-connect")
+		return
+	}
 
-		// Находим локацию с минимальным пингом
-		fastest := locations.FindFastestLocation(actualLocations)
-		if fastest == nil {
-			fmt.Println("Could not find fastest location")
-			return
-		}
+	// Находим локацию с минимальным пингом
+	fastest := locations.FindFastestLocation(actualLocations)
+	if fastest == nil {
+		fmt.Println("Could not find fastest location")
+		return
+	}
 
-		// Подключаемся к самому быстрому серверу
-		v.connectToLocation(fastest.City)
-	}()
+	// Подключаемся к самому быстрому серверу
+	v.connectToLocation(fastest.City)
 }
 
 func (v *VPNManager) connectToList() {
@@ -279,24 +280,22 @@ func (v *VPNManager) connectToLocation(city string) {
 }
 
 func (v *VPNManager) disconnect() {
-	go func() {
-		output, err := v.executeCommand("disconnect")
-		if err != nil {
-			fmt.Printf("Disconnect error: %v\nOutput: %s\n", err, output)
-			return
-		}
+	output, err := v.executeCommand("disconnect")
+	if err != nil {
+		fmt.Printf("Disconnect error: %v\nOutput: %s\n", err, output)
+		return
+	}
 
-		v.mutex.Lock()
-		v.isConnected = false
-		v.location = ""
-		v.status = statusDisconnected
-		v.mutex.Unlock()
+	v.mutex.Lock()
+	v.isConnected = false
+	v.location = ""
+	v.status = statusDisconnected
+	v.mutex.Unlock()
 
-		select {
-		case v.updateChan <- true:
-		default:
-		}
-	}()
+	select {
+	case v.updateChan <- true:
+	default:
+	}
 }
 
 func (v *VPNManager) startStatusChecker() {
