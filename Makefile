@@ -60,6 +60,10 @@ run-race: tidy
 lint:
 	go tool golangci-lint run ./...
 
+.PHONY: vulncheck
+vulncheck:
+	go tool govulncheck ./...
+
 .PHONY: tidy
 tidy:
 	$(GOMOD) tidy
