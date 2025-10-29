@@ -33,6 +33,29 @@ func (u *UI) DesktopApp() (desktop.App, bool) {
 	return desk, ok
 }
 
+func (u *UI) Dashboard() string {
+	// Создаем новое окно для выбора локации
+	window := u.Fyne.NewWindow("adgui")
+	window.Resize(fyne.NewSize(800, 600))
+
+	//container := widget.Container()
+
+	label := widget.NewTextGridFromString("TODO")
+	window.SetContent(label)
+	window.Show()
+	return "" // TODO
+}
+
+func (u *UI) ShowLicense(text string) {
+	// Создаем новое окно для выбора локации
+	window := u.Fyne.NewWindow("adgui: select location")
+	window.Resize(fyne.NewSize(500, 600))
+
+	label := widget.NewTextGridFromString(text)
+	window.SetContent(label)
+	window.Show()
+}
+
 func (u *UI) ShowLocationSelector(locations []locations.Location, connectCity func(string)) {
 	// Создаем новое окно для выбора локации
 	window := u.Fyne.NewWindow("adgui: select location")

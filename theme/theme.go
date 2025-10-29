@@ -10,10 +10,38 @@ var iconOff []byte
 //go:embed icon-on.png
 var iconOn []byte
 
+//go:embed menu-icon-on.png
+var menuIconOn []byte
+
+//go:embed menu-icon-off.png
+var menuIconOff []byte
+
 var (
-	DisconnectedIcon = disconnectedIcon{}
-	ConnectedIcon    = connectedIcon{}
+	DisconnectedIcon     = disconnectedIcon{}
+	ConnectedIcon        = connectedIcon{}
+	MenuDisconnectedIcon = menuDisconnectedIcon{}
+	MenuConnectedIcon    = menuConnectedIcon{}
 )
+
+type menuDisconnectedIcon struct{}
+
+func (menuDisconnectedIcon) Name() string {
+	return "vpn-disconnected"
+}
+
+func (menuDisconnectedIcon) Content() []byte {
+	return menuIconOff
+}
+
+type menuConnectedIcon struct{}
+
+func (menuConnectedIcon) Name() string {
+	return "vpn-connected"
+}
+
+func (menuConnectedIcon) Content() []byte {
+	return menuIconOn
+}
 
 type disconnectedIcon struct{}
 

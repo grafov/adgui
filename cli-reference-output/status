@@ -1,0 +1,3 @@
+Connected to [1mFRANKFURT[0m in [1mTUN[0m mode, running on [1mtun0[0m
+Warning: System DNS could not be configured. DNS queries may bypass the VPN tunnel
+You can disconnect by running `/opt/adguardvpn_cli/adguardvpn-cli disconnect`

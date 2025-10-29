@@ -71,6 +71,8 @@ tidy:
 # Build under regular user, only install under root!
 .PHONY: install
 install: release-x11 release-wayland
+	@echo "Don't forget to set SUDO=sudo (or SUDO=doas) before this command!"
+	@echo "for example: SUDO=doas make install"
 	$(SUDO) install ./build/adgui-x11 $(PREFIX)
 	$(SUDO) install ./build/adgui-wayland $(PREFIX)
 	$(SUDO) install ./adgui-run $(PREFIX)

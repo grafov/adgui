@@ -17,6 +17,8 @@ import (
 	"fyne.io/fyne/v2/driver/desktop"
 )
 
+const startDelay = 3 * time.Second // Начальная задержка
+
 // messages captured from adguard-cli stdout
 const (
 	statusDisconnected = "VPN is disconnected"
@@ -33,12 +35,14 @@ type VPNManager struct {
 	ui           *ui.UI
 	deskApp      desktop.App
 	menu         *fyne.Menu
-	status       string
-	location     string
-	isConnected  bool
-	mutex        sync.RWMutex
 	statusTicker *time.Ticker
-	updateChan   chan bool
+	updateReqs   chan struct{}
+	checkReqs    chan struct{}
+
+	mutex       sync.RWMutex
+	status      string
+	location    string
+	isConnected bool
 }
 
 func New(ui *ui.UI) *VPNManager {
@@ -46,43 +50,55 @@ func New(ui *ui.UI) *VPNManager {
 		vpnManager := &VPNManager{
 			ui:         ui,
 			deskApp:    desk,
-			updateChan: make(chan bool, 1),
+			updateReqs: make(chan struct{}, 1),
+			checkReqs:  make(chan struct{}, 1),
 		}
 		vpnManager.createTrayMenu()
 
 		// Запуск фоновой проверки статуса
-		go vpnManager.startStatusChecker()
-		go func() {
-			for range vpnManager.updateChan {
-				vpnManager.updateTrayIcon()
-				vpnManager.updateMenuItems()
-			}
-		}()
+		go vpnManager.statusCheckLoop()
+		go vpnManager.updateUI()
 		return vpnManager
 	}
 	fmt.Println("System tray not supported")
 	return nil
 }
 
+func (v *VPNManager) updateUI() {
+	select {
+	case v.checkReqs <- struct{}{}:
+		time.Sleep(200 * time.Millisecond)
+	default:
+	}
+	for range v.updateReqs {
+		v.updateTrayIcon()
+		v.updateMenuItems()
+	}
+}
+
 func (v *VPNManager) createTrayMenu() {
+	status := fyne.NewMenuItem("Adguard VPN", func() {})
+	dashboard := fyne.NewMenuItem("Show dashboard", func() {
+		v.dashboard()
+	})
 	connectAuto := fyne.NewMenuItem("Connect Auto", func() {
 		v.connectAuto()
 	})
-
 	connectTo := fyne.NewMenuItem("Connect To...", func() {
 		v.connectToList()
 	})
-
 	disconnect := fyne.NewMenuItem("Disconnect", func() {
 		v.disconnect()
 	})
-
 	v.menu = fyne.NewMenu("AdGuard VPN Client",
+		status,
+		dashboard,
 		connectAuto,
 		connectTo,
 		fyne.NewMenuItemSeparator(),
 		disconnect,
 	)
+	v.menu.Items[0].Disabled = true // status field
 
 	v.deskApp.SetSystemTrayMenu(v.menu)
 }
@@ -94,17 +110,20 @@ func (v *VPNManager) updateMenuItems() {
 	// Обновляем доступность пунктов меню
 	if v.menu != nil {
 		items := v.menu.Items
-		if len(items) >= 3 {
-			items[0].Disabled = v.isConnected  // Connect Auto
-			items[1].Disabled = false          // Connect To... available always
-			items[3].Disabled = !v.isConnected // Disconnect
-			v.menu.Items = items
-		}
 		if v.isConnected {
 			v.menu.Label = "VPN connected"
+			items[0].Icon = theme.MenuConnectedIcon
+			items[0].Label = strings.ToUpper(v.location)
 		} else {
 			v.menu.Label = "VPN disconected"
+			items[0].Icon = theme.MenuDisconnectedIcon
+			items[0].Label = "OFF"
 		}
+		items[1].Disabled = true           // FIXME Dashboard yet not ready
+		items[2].Disabled = v.isConnected  // Connect Auto
+		items[3].Disabled = false          // Connect To... available always
+		items[4].Disabled = !v.isConnected // Disconnect
+		v.menu.Items = items
 		fyne.Do(func() {
 			v.deskApp.SetSystemTrayMenu(v.menu)
 		})
@@ -122,7 +141,6 @@ func (v *VPNManager) updateTrayIcon() {
 			v.deskApp.SetSystemTrayIcon(theme.DisconnectedIcon)
 		}
 	})
-	// TODO: Установить tooltip для иконки в трее (если доступно)
 }
 
 func (v *VPNManager) executeCommand(args ...string) (string, error) {
@@ -198,7 +216,7 @@ func (v *VPNManager) connectToLocation(city string) {
 		v.mutex.Unlock()
 
 		select {
-		case v.updateChan <- true:
+		case v.updateReqs <- struct{}{}:
 		default:
 		}
 	}
@@ -218,19 +236,36 @@ func (v *VPNManager) disconnect() {
 	v.mutex.Unlock()
 
 	select {
-	case v.updateChan <- true:
+	case v.updateReqs <- struct{}{}:
 	default:
 	}
 }
 
-func (v *VPNManager) startStatusChecker() {
-	time.Sleep(2 * time.Second) // Начальная задержка 3 секунды
+func (v *VPNManager) showLicense() {
+	output, err := v.executeCommand("license")
+	if err != nil {
+		fmt.Printf("Show license error: %v\nOutput: %s\n", err, output)
+		return
+	}
+	ui.New().ShowLicense(output)
+
+	select {
+	case v.updateReqs <- struct{}{}:
+	default:
+	}
+}
+
+func (v *VPNManager) statusCheckLoop() {
+	time.Sleep(startDelay)
 	v.checkStatus()
 
 	// Regular checks
 	v.statusTicker = time.NewTicker(30 * time.Second)
 	defer v.statusTicker.Stop()
-	for range v.statusTicker.C {
+	select {
+	case <-v.checkReqs:
+		v.checkStatus()
+	case <-v.statusTicker.C:
 		v.checkStatus()
 	}
 }
@@ -258,8 +293,26 @@ func (v *VPNManager) checkStatus() {
 		lines := strings.SplitSeq(output, "\n")
 		for line := range lines {
 			if strings.Contains(line, "Connected to") {
+				// Извлекаем название локации между ANSI кодами
+				// Формат: "Connected to [1mLOCATION[0m in ..."
+				location := line
+				// Удаляем префикс до названия локации
+				prefix := "Connected to "
+				if idx := strings.Index(location, prefix); idx >= 0 {
+					location = location[idx+len(prefix):]
+				}
+				// Удаляем ANSI коды жирного шрифта
+				location = strings.ReplaceAll(location, "[1m", "")
+				location = strings.ReplaceAll(location, "[0m", "")
+				// Удаляем суффикс после названия локации
+				if idx := strings.Index(location, " in "); idx >= 0 {
+					location = location[:idx]
+				}
+				// Очищаем от пробелов
+				location = strings.TrimSpace(location)
+
 				v.mutex.Lock()
-				v.location = strings.TrimSpace(line)
+				v.location = location
 				v.isConnected = true
 				fmt.Printf("status check: connected to %s\n", v.location)
 				v.mutex.Unlock()
@@ -269,7 +322,16 @@ func (v *VPNManager) checkStatus() {
 	}
 
 	select {
-	case v.updateChan <- true:
+	case v.updateReqs <- struct{}{}:
+	default:
+	}
+}
+
+func (v *VPNManager) dashboard() {
+	v.menu.Items[0].Disabled = true
+	_ = ui.New().Dashboard() // FIXME
+	select {
+	case v.updateReqs <- struct{}{}:
 	default:
 	}
 }
