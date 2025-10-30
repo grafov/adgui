@@ -2,7 +2,6 @@ package commands
 
 import (
 	"fmt"
-	"image/color"
 	"os"
 	"os/exec"
 	"strings"
@@ -10,11 +9,6 @@ import (
 	"time"
 
 	"adgui/locations"
-	"adgui/theme"
-	"adgui/ui"
-
-	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/driver/desktop"
 )
 
 const startDelay = 3 * time.Second // Начальная задержка
@@ -25,122 +19,45 @@ const (
 	statusConnectedTo  = "Successfully Connected to"
 )
 
-var (
-	DisconnectedColor = color.NRGBA{R: 128, G: 128, B: 128, A: 255} // Серый
-	ConnectedColor    = color.NRGBA{R: 0, G: 255, B: 0, A: 255}     // Зеленый
-	WarningColor      = color.NRGBA{R: 255, G: 255, B: 0, A: 255}   // Желтый
-)
-
 type VPNManager struct {
-	ui           *ui.UI
-	deskApp      desktop.App
-	menu         *fyne.Menu
-	statusTicker *time.Ticker
-	updateReqs   chan struct{}
-	checkReqs    chan struct{}
+	statusTicker   *time.Ticker
+	onStatusChange func()
 
-	mutex       sync.RWMutex
+	// all below protected by mutex
+	statemx     sync.Mutex
 	status      string
 	location    string
 	isConnected bool
 }
 
-func New(ui *ui.UI) *VPNManager {
-	if desk, ok := ui.DesktopApp(); ok {
-		vpnManager := &VPNManager{
-			ui:         ui,
-			deskApp:    desk,
-			updateReqs: make(chan struct{}, 1),
-			checkReqs:  make(chan struct{}, 1),
-		}
-		vpnManager.createTrayMenu()
-
-		// Запуск фоновой проверки статуса
-		go vpnManager.statusCheckLoop()
-		go vpnManager.updateUI()
-		return vpnManager
-	}
-	fmt.Println("System tray not supported")
-	return nil
+func New() *VPNManager {
+	mgr := VPNManager{}
+	go mgr.statusCheckLoop()
+	return &mgr
 }
 
-func (v *VPNManager) updateUI() {
-	select {
-	case v.checkReqs <- struct{}{}:
-		time.Sleep(200 * time.Millisecond)
-	default:
-	}
-	for range v.updateReqs {
-		v.updateTrayIcon()
-		v.updateMenuItems()
-	}
+func (v *VPNManager) Location() string {
+	v.statemx.Lock()
+	defer v.statemx.Unlock()
+	return v.location
 }
 
-func (v *VPNManager) createTrayMenu() {
-	status := fyne.NewMenuItem("Adguard VPN", func() {})
-	dashboard := fyne.NewMenuItem("Show dashboard", func() {
-		v.dashboard()
-	})
-	connectAuto := fyne.NewMenuItem("Connect Auto", func() {
-		v.connectAuto()
-	})
-	connectTo := fyne.NewMenuItem("Connect To...", func() {
-		v.connectToList()
-	})
-	disconnect := fyne.NewMenuItem("Disconnect", func() {
-		v.disconnect()
-	})
-	v.menu = fyne.NewMenu("AdGuard VPN Client",
-		status,
-		dashboard,
-		connectAuto,
-		connectTo,
-		fyne.NewMenuItemSeparator(),
-		disconnect,
-	)
-	v.menu.Items[0].Disabled = true // status field
-
-	v.deskApp.SetSystemTrayMenu(v.menu)
+func (v *VPNManager) Status() string {
+	v.statemx.Lock()
+	defer v.statemx.Unlock()
+	return v.status
 }
 
-func (v *VPNManager) updateMenuItems() {
-	v.mutex.Lock()
-	defer v.mutex.Unlock()
-
-	// Обновляем доступность пунктов меню
-	if v.menu != nil {
-		items := v.menu.Items
-		if v.isConnected {
-			v.menu.Label = "VPN connected"
-			items[0].Icon = theme.MenuConnectedIcon
-			items[0].Label = strings.ToUpper(v.location)
-		} else {
-			v.menu.Label = "VPN disconected"
-			items[0].Icon = theme.MenuDisconnectedIcon
-			items[0].Label = "OFF"
-		}
-		items[1].Disabled = true           // FIXME Dashboard yet not ready
-		items[2].Disabled = v.isConnected  // Connect Auto
-		items[3].Disabled = false          // Connect To... available always
-		items[4].Disabled = !v.isConnected // Disconnect
-		v.menu.Items = items
-		fyne.Do(func() {
-			v.deskApp.SetSystemTrayMenu(v.menu)
-		})
-	}
+func (v *VPNManager) IsConnected() bool {
+	v.statemx.Lock()
+	defer v.statemx.Unlock()
+	return v.isConnected
 }
 
-func (v *VPNManager) updateTrayIcon() {
-	v.mutex.RLock()
-	defer v.mutex.RUnlock()
-
-	fyne.Do(func() {
-		if v.isConnected {
-			v.deskApp.SetSystemTrayIcon(theme.ConnectedIcon)
-		} else {
-			v.deskApp.SetSystemTrayIcon(theme.DisconnectedIcon)
-		}
-	})
+func (v *VPNManager) SetStatusChangeCallback(callback func()) {
+	v.statemx.Lock()
+	defer v.statemx.Unlock()
+	v.onStatusChange = callback
 }
 
 func (v *VPNManager) executeCommand(args ...string) (string, error) {
@@ -154,7 +71,7 @@ func (v *VPNManager) executeCommand(args ...string) (string, error) {
 	return string(output), err
 }
 
-func (v *VPNManager) connectAuto() {
+func (v *VPNManager) ConnectAuto() {
 	// Получаем список локаций
 	output, err := v.executeCommand("connect")
 	if err != nil {
@@ -180,29 +97,27 @@ func (v *VPNManager) connectAuto() {
 	}
 
 	// Подключаемся к самому быстрому серверу
-	v.connectToLocation(fastest.City)
+	v.ConnectToLocation(fastest.City)
 }
 
-func (v *VPNManager) connectToList() {
+func (v *VPNManager) ListLocations() []locations.Location {
 	// Получаем список локаций
 	output, err := v.executeCommand("list-locations")
 	if err != nil {
 		fmt.Printf("List locations error: %v\nOutput: %s\n", err, output)
-		return
+		return nil
 	}
 
 	// Парсим список локаций
 	actualLocations := locations.ParseLocations(output)
 	if len(actualLocations) == 0 {
 		fmt.Println("No locations found")
-		return
+		return nil
 	}
-
-	// Создаем окно с выбором локации
-	v.ui.ShowLocationSelector(actualLocations, v.connectToLocation)
+	return actualLocations
 }
 
-func (v *VPNManager) connectToLocation(city string) {
+func (v *VPNManager) ConnectToLocation(city string) {
 	output, err := v.executeCommand("connect", "-l", city)
 	if err != nil {
 		fmt.Printf("Connect to location error: %v\nOutput: %s\n", err, output)
@@ -210,49 +125,42 @@ func (v *VPNManager) connectToLocation(city string) {
 	}
 
 	if strings.Contains(output, statusConnectedTo) {
-		v.mutex.Lock()
+		v.statemx.Lock()
 		v.isConnected = true
 		v.location = city
-		v.mutex.Unlock()
-
-		select {
-		case v.updateReqs <- struct{}{}:
-		default:
+		callback := v.onStatusChange
+		v.statemx.Unlock()
+		if callback != nil {
+			callback()
 		}
 	}
 }
 
-func (v *VPNManager) disconnect() {
+func (v *VPNManager) Disconnect() {
 	output, err := v.executeCommand("disconnect")
 	if err != nil {
 		fmt.Printf("Disconnect error: %v\nOutput: %s\n", err, output)
 		return
 	}
 
-	v.mutex.Lock()
+	v.statemx.Lock()
 	v.isConnected = false
 	v.location = ""
 	v.status = statusDisconnected
-	v.mutex.Unlock()
-
-	select {
-	case v.updateReqs <- struct{}{}:
-	default:
+	callback := v.onStatusChange
+	v.statemx.Unlock()
+	if callback != nil {
+		callback()
 	}
 }
 
-func (v *VPNManager) showLicense() {
+func (v *VPNManager) License() string {
 	output, err := v.executeCommand("license")
 	if err != nil {
 		fmt.Printf("Show license error: %v\nOutput: %s\n", err, output)
-		return
+		return ""
 	}
-	ui.New().ShowLicense(output)
-
-	select {
-	case v.updateReqs <- struct{}{}:
-	default:
-	}
+	return output
 }
 
 func (v *VPNManager) statusCheckLoop() {
@@ -263,8 +171,8 @@ func (v *VPNManager) statusCheckLoop() {
 	v.statusTicker = time.NewTicker(30 * time.Second)
 	defer v.statusTicker.Stop()
 	select {
-	case <-v.checkReqs:
-		v.checkStatus()
+	// case <-v.checkReqs:
+	// 	v.checkStatus()
 	case <-v.statusTicker.C:
 		v.checkStatus()
 	}
@@ -277,17 +185,21 @@ func (v *VPNManager) checkStatus() {
 		return
 	}
 
-	v.mutex.Lock()
+	v.statemx.Lock()
 	v.status = output
-	v.mutex.Unlock()
+	v.statemx.Unlock()
 
 	// Проверяем статус
 	if strings.Contains(output, statusDisconnected) {
-		v.mutex.Lock()
+		v.statemx.Lock()
 		v.isConnected = false
 		v.location = ""
+		callback := v.onStatusChange
+		v.statemx.Unlock()
 		fmt.Printf("status check: disconnected\n")
-		v.mutex.Unlock()
+		if callback != nil {
+			callback()
+		}
 	} else if strings.Contains(output, "Connected to") {
 		// Извлекаем название локации из статуса
 		lines := strings.SplitSeq(output, "\n")
@@ -302,8 +214,8 @@ func (v *VPNManager) checkStatus() {
 					location = location[idx+len(prefix):]
 				}
 				// Удаляем ANSI коды жирного шрифта
-				location = strings.ReplaceAll(location, "[1m", "")
-				location = strings.ReplaceAll(location, "[0m", "")
+				location = strings.ReplaceAll(location, `[1m`, ``)
+				location = strings.ReplaceAll(location, `[0m`, ``)
 				// Удаляем суффикс после названия локации
 				if idx := strings.Index(location, " in "); idx >= 0 {
 					location = location[:idx]
@@ -311,27 +223,17 @@ func (v *VPNManager) checkStatus() {
 				// Очищаем от пробелов
 				location = strings.TrimSpace(location)
 
-				v.mutex.Lock()
+				v.statemx.Lock()
 				v.location = location
 				v.isConnected = true
-				fmt.Printf("status check: connected to %s\n", v.location)
-				v.mutex.Unlock()
+				callback := v.onStatusChange
+				v.statemx.Unlock()
+				fmt.Printf("status check: connected to %s\n", location)
+				if callback != nil {
+					callback()
+				}
 				break
 			}
 		}
-	}
-
-	select {
-	case v.updateReqs <- struct{}{}:
-	default:
-	}
-}
-
-func (v *VPNManager) dashboard() {
-	v.menu.Items[0].Disabled = true
-	_ = ui.New().Dashboard() // FIXME
-	select {
-	case v.updateReqs <- struct{}{}:
-	default:
 	}
 }

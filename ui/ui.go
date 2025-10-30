@@ -2,35 +2,161 @@ package ui
 
 import (
 	"fmt"
+	"image/color"
 	"strconv"
+	"strings"
+	"sync"
+	"time"
 
-	"adgui/locations"
+	"adgui/commands"
 	"adgui/theme"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/driver/desktop"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 )
 
-type UI struct {
-	Fyne fyne.App
-}
+var (
+	DisconnectedColor = color.NRGBA{R: 128, G: 128, B: 128, A: 255} // Серый
+	ConnectedColor    = color.NRGBA{R: 0, G: 255, B: 0, A: 255}     // Зеленый
+	WarningColor      = color.NRGBA{R: 255, G: 255, B: 0, A: 255}   // Желтый
+)
 
-func New() *UI {
+type (
+	// Properties related to UI.
+	UI struct {
+		Fyne       fyne.App
+		desk       desktop.App
+		updateReqs chan struct{}
+		// protected by mutex
+		traymx sync.RWMutex
+		menu   *fyne.Menu
+
+		// and...
+		withLogicIncluded
+	}
+	// Properties related to application logic.
+	withLogicIncluded struct {
+		vpnmgr    *commands.VPNManager
+		checkReqs chan struct{}
+	}
+)
+
+func New(vpnmgr *commands.VPNManager) *UI {
 	myApp := app.NewWithID("AdGuard VPN Client")
 	myApp.SetIcon(theme.DisconnectedIcon)
-	return &UI{Fyne: myApp}
+	logic := withLogicIncluded{
+		vpnmgr:    vpnmgr,
+		checkReqs: make(chan struct{}, 1),
+	}
+	desk, ok := myApp.(desktop.App)
+	ui := UI{
+		Fyne:              myApp,
+		desk:              desk,
+		updateReqs:        make(chan struct{}, 1),
+		withLogicIncluded: logic,
+	}
+	if ok {
+		ui.createTrayMenu()
+		// Register callback to notify UI about status changes
+		vpnmgr.SetStatusChangeCallback(func() {
+			select {
+			case ui.updateReqs <- struct{}{}:
+			default:
+			}
+		})
+	} else {
+		fmt.Println("System tray not supported")
+	}
+	return &ui
 }
 
 func (u *UI) Run() {
 	u.Fyne.Run()
 }
 
-func (u *UI) DesktopApp() (desktop.App, bool) {
-	desk, ok := u.Fyne.(desktop.App)
-	return desk, ok
+func (u *UI) createTrayMenu() {
+	status := fyne.NewMenuItem("Adguard VPN", func() {})
+	dashboard := fyne.NewMenuItem("Show dashboard", func() {
+		u.Dashboard()
+	})
+	connectAuto := fyne.NewMenuItem("Connect Auto", func() {
+		u.vpnmgr.ConnectAuto()
+	})
+	connectTo := fyne.NewMenuItem("Connect To...", func() {
+		u.LocationSelector()
+	})
+	disconnect := fyne.NewMenuItem("Disconnect", func() {
+		u.vpnmgr.Disconnect()
+	})
+	u.menu = fyne.NewMenu("AdGuard VPN Client",
+		status,
+		dashboard,
+		connectAuto,
+		connectTo,
+		fyne.NewMenuItemSeparator(),
+		disconnect,
+	)
+	u.menu.Items[0].Disabled = true // status field
+
+	u.desk.SetSystemTrayMenu(u.menu)
+	go u.updateUI()
+}
+
+func (u *UI) updateMenuItems() {
+	u.traymx.Lock()
+	defer u.traymx.Unlock()
+
+	// Обновляем доступность пунктов меню
+	if u.menu != nil {
+		items := u.menu.Items
+		if u.vpnmgr.IsConnected() {
+			u.menu.Label = "VPN connected"
+			items[0].Icon = theme.MenuConnectedIcon
+			items[0].Label = strings.ToUpper(u.vpnmgr.Location())
+		} else {
+			u.menu.Label = "VPN disconected"
+			items[0].Icon = theme.MenuDisconnectedIcon
+			items[0].Label = "OFF"
+		}
+		connected := u.vpnmgr.IsConnected()
+		items[1].Disabled = false
+		items[2].Disabled = connected  // Connect Auto
+		items[3].Disabled = false      // Connect To... available always
+		items[4].Disabled = !connected // Disconnect
+		u.menu.Items = items
+		fyne.Do(func() {
+			u.desk.SetSystemTrayMenu(u.menu)
+		})
+	}
+}
+
+func (u *UI) updateUI() {
+	select {
+	case u.checkReqs <- struct{}{}:
+		time.Sleep(200 * time.Millisecond)
+	default:
+	}
+	for range u.updateReqs {
+		u.updateTrayIcon()
+		u.updateMenuItems()
+	}
+}
+
+func (u *UI) updateTrayIcon() {
+	u.traymx.RLock()
+	defer u.traymx.RUnlock()
+
+	fyne.Do(func() {
+		if u.vpnmgr.IsConnected() {
+			u.desk.SetSystemTrayIcon(theme.ConnectedIcon)
+		} else {
+			u.desk.SetSystemTrayIcon(theme.DisconnectedIcon)
+		}
+	})
 }
 
 func (u *UI) Dashboard() string {
@@ -38,28 +164,38 @@ func (u *UI) Dashboard() string {
 	window := u.Fyne.NewWindow("adgui")
 	window.Resize(fyne.NewSize(800, 600))
 
-	//container := widget.Container()
+	// Connections page
+	statusLbl := widget.NewLabel(u.vpnmgr.Status())
+	turnOn := widget.NewButton("Connect", func() {})
+	connectTo := widget.NewButton("Connect To...", func() {})
+	close := widget.NewButton("X", func() { window.Close() })
+	grid := container.New(layout.NewFormLayout(), statusLbl, turnOn, connectTo, close)
 
-	label := widget.NewTextGridFromString("TODO")
-	window.SetContent(label)
+	license := u.licensePanel()
+	tabs := container.NewAppTabs(
+		container.NewTabItem("Connections", grid),
+		container.NewTabItem("License", license),
+	)
+	tabs.SetTabLocation(container.TabLocationLeading)
+	window.SetContent(tabs)
 	window.Show()
-	return "" // TODO
+	return ""
 }
 
-func (u *UI) ShowLicense(text string) {
+func (u *UI) licensePanel() *fyne.Container {
+	return container.New(
+		layout.NewVBoxLayout(),
+		widget.NewLabel("AdGuard license"),
+		widget.NewTextGridFromString(u.vpnmgr.License()),
+	)
+}
+
+func (u *UI) LocationSelector() {
 	// Создаем новое окно для выбора локации
 	window := u.Fyne.NewWindow("adgui: select location")
 	window.Resize(fyne.NewSize(500, 600))
 
-	label := widget.NewTextGridFromString(text)
-	window.SetContent(label)
-	window.Show()
-}
-
-func (u *UI) ShowLocationSelector(locations []locations.Location, connectCity func(string)) {
-	// Создаем новое окно для выбора локации
-	window := u.Fyne.NewWindow("adgui: select location")
-	window.Resize(fyne.NewSize(500, 600))
+	locations := u.vpnmgr.ListLocations()
 
 	table := widget.NewTable(
 		// Return number of rows and columns
@@ -115,7 +251,7 @@ func (u *UI) ShowLocationSelector(locations []locations.Location, connectCity fu
 	table.OnSelected = func(id widget.TableCellID) {
 		fmt.Printf("Selected: %+v\n", locations[id.Row])
 		city := locations[id.Row].City
-		go connectCity(city)
+		go u.vpnmgr.ConnectToLocation(city)
 		window.Close()
 	}
 

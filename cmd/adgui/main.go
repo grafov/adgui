@@ -6,7 +6,7 @@ import (
 )
 
 func main() {
-	appUI := ui.New()
-	commands.New(appUI)
+	appLogic := commands.New()
+	appUI := ui.New(appLogic)
 	appUI.Run()
 }
