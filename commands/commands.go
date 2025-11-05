@@ -170,11 +170,13 @@ func (v *VPNManager) statusCheckLoop() {
 	// Regular checks
 	v.statusTicker = time.NewTicker(30 * time.Second)
 	defer v.statusTicker.Stop()
-	select {
-	// case <-v.checkReqs:
-	// 	v.checkStatus()
-	case <-v.statusTicker.C:
-		v.checkStatus()
+	for {
+		select {
+		// case <-v.checkReqs:
+		// 	v.checkStatus()
+		case <-v.statusTicker.C:
+			v.checkStatus()
+		}
 	}
 }
 

@@ -178,6 +178,14 @@ func (u *UI) Dashboard() string {
 	)
 	tabs.SetTabLocation(container.TabLocationLeading)
 	window.SetContent(tabs)
+
+	// Close on Esc
+	window.Canvas().SetOnTypedKey(func(k *fyne.KeyEvent) {
+		if k.Name == fyne.KeyEscape {
+			window.Close()
+		}
+	})
+
 	window.Show()
 	return ""
 }
@@ -193,7 +201,7 @@ func (u *UI) licensePanel() *fyne.Container {
 func (u *UI) LocationSelector() {
 	// Создаем новое окно для выбора локации
 	window := u.Fyne.NewWindow("adgui: select location")
-	window.Resize(fyne.NewSize(500, 600))
+	window.Resize(fyne.NewSize(640, 720))
 
 	locations := u.vpnmgr.ListLocations()
 
@@ -249,6 +257,9 @@ func (u *UI) LocationSelector() {
 
 	// Обработчик выбора локации
 	table.OnSelected = func(id widget.TableCellID) {
+		if id.Row == 0 {
+			return // just skip header
+		}
 		fmt.Printf("Selected: %+v\n", locations[id.Row])
 		city := locations[id.Row].City
 		go u.vpnmgr.ConnectToLocation(city)
@@ -256,5 +267,13 @@ func (u *UI) LocationSelector() {
 	}
 
 	window.SetContent(container.NewStack(table))
+
+	// Close on Esc
+	window.Canvas().SetOnTypedKey(func(k *fyne.KeyEvent) {
+		if k.Name == fyne.KeyEscape {
+			window.Close()
+		}
+	})
+
 	window.Show()
 }
