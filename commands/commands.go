@@ -22,6 +22,7 @@ const (
 type VPNManager struct {
 	statusTicker   *time.Ticker
 	onStatusChange func()
+	checkReqs      chan struct{}
 
 	// all below protected by mutex
 	statemx     sync.Mutex
@@ -31,7 +32,7 @@ type VPNManager struct {
 }
 
 func New() *VPNManager {
-	mgr := VPNManager{}
+	mgr := VPNManager{checkReqs: make(chan struct{}, 1)}
 	go mgr.statusCheckLoop()
 	return &mgr
 }
@@ -76,28 +77,9 @@ func (v *VPNManager) ConnectAuto() {
 	output, err := v.executeCommand("connect")
 	if err != nil {
 		fmt.Printf("Could not connect: %s: %s\n", err, output)
-		// Раз что-то пошло не так, на всякий случай стоит подождать, перед
-		// новой попыткой коннекта.
-		time.Sleep(1 * time.Second)
-	}
-
-	// Идём альтернативным путём.
-	// Парсим список локаций и выбираем самую быструю, для коннекта к ней.
-	actualLocations := locations.ParseLocations(output)
-	if len(actualLocations) == 0 {
-		fmt.Println("No locations found for auto-connect")
 		return
 	}
-
-	// Находим локацию с минимальным пингом
-	fastest := locations.FindFastestLocation(actualLocations)
-	if fastest == nil {
-		fmt.Println("Could not find fastest location")
-		return
-	}
-
-	// Подключаемся к самому быстрому серверу
-	v.ConnectToLocation(fastest.City)
+	v.checkReqs <- struct{}{}
 }
 
 func (v *VPNManager) ListLocations() []locations.Location {
@@ -168,12 +150,13 @@ func (v *VPNManager) statusCheckLoop() {
 	v.checkStatus()
 
 	// Regular checks
-	v.statusTicker = time.NewTicker(30 * time.Second)
+	v.statusTicker = time.NewTicker(60 * time.Second)
 	defer v.statusTicker.Stop()
 	for {
 		select {
-		// case <-v.checkReqs:
-		// 	v.checkStatus()
+		case <-v.checkReqs:
+			time.Sleep(startDelay)
+			v.checkStatus()
 		case <-v.statusTicker.C:
 			v.checkStatus()
 		}
