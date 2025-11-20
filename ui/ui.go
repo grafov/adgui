@@ -38,8 +38,12 @@ type (
 		// Dashboard window and widgets for live updates
 		dashboardmx          sync.RWMutex
 		dashboardWindow      fyne.Window
-		dashboardStatusLabel *widget.Label
+		dashboardStatusLabel *widget.RichText
 		dashboardConnectBtn  *widget.Button
+
+		// Location selector window
+		locationmx     sync.RWMutex
+		locationWindow fyne.Window
 
 		// and...
 		withLogicIncluded
@@ -192,7 +196,8 @@ func (u *UI) updateDashboard() {
 
 	fyne.Do(func() {
 		if statusLabel != nil {
-			statusLabel.SetText(u.vpnmgr.Status())
+			statusLabel.Segments = parseAnsi(u.vpnmgr.Status()).Segments
+			statusLabel.Refresh()
 		}
 		if connectBtn != nil {
 			u.updateDashboardButtons()
@@ -211,15 +216,14 @@ func (u *UI) Dashboard() string {
 	}
 
 	// Create new dashboard window
-	window := u.Fyne.NewWindow("AdGuard VPN Dashboard")
+	window := u.Fyne.NewWindow("adgui: VPN Dashboard")
 	window.Resize(fyne.NewSize(800, 600))
 	u.dashboardWindow = window
 
 	// Status section
 	statusHeader := widget.NewLabel("Status")
 	statusHeader.TextStyle.Bold = true
-	statusLbl := widget.NewLabel(u.vpnmgr.Status())
-	statusLbl.Wrapping = fyne.TextWrapWord
+	statusLbl := parseAnsi(u.vpnmgr.Status())
 	u.dashboardStatusLabel = statusLbl
 
 	// Control buttons section
@@ -279,14 +283,29 @@ func (u *UI) licensePanel() *fyne.Container {
 	return container.New(
 		layout.NewVBoxLayout(),
 		widget.NewLabel("AdGuard license"),
-		widget.NewTextGridFromString(u.vpnmgr.License()),
+		parseAnsi(u.vpnmgr.License()),
 	)
 }
 
 func (u *UI) LocationSelector() {
+	u.locationmx.Lock()
+	defer u.locationmx.Unlock()
+
+	if u.locationWindow != nil {
+		u.locationWindow.RequestFocus()
+		return
+	}
+
 	// Создаем новое окно для выбора локации
 	window := u.Fyne.NewWindow("adgui: select location")
 	window.Resize(fyne.NewSize(640, 720))
+	u.locationWindow = window
+
+	window.SetOnClosed(func() {
+		u.locationmx.Lock()
+		defer u.locationmx.Unlock()
+		u.locationWindow = nil
+	})
 
 	locations := u.vpnmgr.ListLocations()
 
