@@ -35,6 +35,12 @@ type (
 		traymx sync.RWMutex
 		menu   *fyne.Menu
 
+		// Dashboard window and widgets for live updates
+		dashboardmx          sync.RWMutex
+		dashboardWindow      fyne.Window
+		dashboardStatusLabel *widget.Label
+		dashboardConnectBtn  *widget.Button
+
 		// and...
 		withLogicIncluded
 	}
@@ -143,6 +149,7 @@ func (u *UI) updateUI() {
 	for range u.updateReqs {
 		u.updateTrayIcon()
 		u.updateMenuItems()
+		u.updateDashboard()
 	}
 }
 
@@ -159,21 +166,90 @@ func (u *UI) updateTrayIcon() {
 	})
 }
 
-func (u *UI) Dashboard() string {
-	// Создаем новое окно для выбора локации
-	window := u.Fyne.NewWindow("adgui")
-	window.Resize(fyne.NewSize(800, 600))
+func (u *UI) updateDashboardButtons() {
+	if u.dashboardConnectBtn == nil {
+		return
+	}
 
-	// Connections page
+	connected := u.vpnmgr.IsConnected()
+	if connected {
+		u.dashboardConnectBtn.SetText("Disconnect")
+	} else {
+		u.dashboardConnectBtn.SetText("Connect")
+	}
+}
+
+func (u *UI) updateDashboard() {
+	u.dashboardmx.RLock()
+	window := u.dashboardWindow
+	statusLabel := u.dashboardStatusLabel
+	connectBtn := u.dashboardConnectBtn
+	u.dashboardmx.RUnlock()
+
+	if window == nil {
+		return
+	}
+
+	fyne.Do(func() {
+		if statusLabel != nil {
+			statusLabel.SetText(u.vpnmgr.Status())
+		}
+		if connectBtn != nil {
+			u.updateDashboardButtons()
+		}
+	})
+}
+
+func (u *UI) Dashboard() string {
+	u.dashboardmx.Lock()
+	defer u.dashboardmx.Unlock()
+
+	// If dashboard window already exists, bring it to front
+	if u.dashboardWindow != nil {
+		u.dashboardWindow.RequestFocus()
+		return ""
+	}
+
+	// Create new dashboard window
+	window := u.Fyne.NewWindow("AdGuard VPN Dashboard")
+	window.Resize(fyne.NewSize(800, 600))
+	u.dashboardWindow = window
+
+	// Status section
+	statusHeader := widget.NewLabel("Status")
+	statusHeader.TextStyle.Bold = true
 	statusLbl := widget.NewLabel(u.vpnmgr.Status())
-	turnOn := widget.NewButton("Connect", func() {})
-	connectTo := widget.NewButton("Connect To...", func() {})
-	close := widget.NewButton("X", func() { window.Close() })
-	grid := container.New(layout.NewFormLayout(), statusLbl, turnOn, connectTo, close)
+	statusLbl.Wrapping = fyne.TextWrapWord
+	u.dashboardStatusLabel = statusLbl
+
+	// Control buttons section
+	connectBtn := widget.NewButton("", func() {
+		if u.vpnmgr.IsConnected() {
+			u.vpnmgr.Disconnect()
+		} else {
+			u.vpnmgr.ConnectAuto()
+		}
+	})
+	u.dashboardConnectBtn = connectBtn
+	u.updateDashboardButtons()
+
+	connectToBtn := widget.NewButton("Connect To...", func() {
+		u.LocationSelector()
+	})
+
+	buttonContainer := container.NewHBox(connectBtn, connectToBtn)
+
+	// Connections page content
+	connectionsContent := container.NewVBox(
+		statusHeader,
+		statusLbl,
+		widget.NewSeparator(),
+		buttonContainer,
+	)
 
 	license := u.licensePanel()
 	tabs := container.NewAppTabs(
-		container.NewTabItem("Connections", grid),
+		container.NewTabItem("Connections", connectionsContent),
 		container.NewTabItem("License", license),
 	)
 	tabs.SetTabLocation(container.TabLocationLeading)
@@ -184,6 +260,15 @@ func (u *UI) Dashboard() string {
 		if k.Name == fyne.KeyEscape {
 			window.Close()
 		}
+	})
+
+	// Clean up references when window is closed
+	window.SetOnClosed(func() {
+		u.dashboardmx.Lock()
+		defer u.dashboardmx.Unlock()
+		u.dashboardWindow = nil
+		u.dashboardStatusLabel = nil
+		u.dashboardConnectBtn = nil
 	})
 
 	window.Show()
