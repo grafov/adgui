@@ -12,3 +12,4 @@ if [[ -n "$WAYLAND_DISPLAY" || "$XDG_SESSION_TYPE" == "wayland" ]]; then
 fi
 
 /usr/local/bin/${binary} $@
+# ^^^ optionally add for debug: >/tmp/adgui.log 2>&1

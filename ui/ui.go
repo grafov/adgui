@@ -211,7 +211,7 @@ func (u *UI) Dashboard() string {
 
 	// If dashboard window already exists, bring it to front
 	if u.dashboardWindow != nil {
-		u.dashboardWindow.RequestFocus()
+		u.dashboardWindow.Show()
 		return ""
 	}
 
@@ -292,7 +292,7 @@ func (u *UI) LocationSelector() {
 	defer u.locationmx.Unlock()
 
 	if u.locationWindow != nil {
-		u.locationWindow.RequestFocus()
+		u.locationWindow.Show()
 		return
 	}
 
