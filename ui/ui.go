@@ -211,7 +211,7 @@ func (u *UI) Dashboard() string {
 
 	// If dashboard window already exists, bring it to front
 	if u.dashboardWindow != nil {
-		u.dashboardWindow.RequestFocus()
+		u.dashboardWindow.Show()
 		return ""
 	}
 
@@ -262,7 +262,9 @@ func (u *UI) Dashboard() string {
 	// Close on Esc
 	window.Canvas().SetOnTypedKey(func(k *fyne.KeyEvent) {
 		if k.Name == fyne.KeyEscape {
-			window.Close()
+			fyne.Do(func() {
+				window.Close()
+			})
 		}
 	})
 
@@ -292,7 +294,7 @@ func (u *UI) LocationSelector() {
 	defer u.locationmx.Unlock()
 
 	if u.locationWindow != nil {
-		u.locationWindow.RequestFocus()
+		u.locationWindow.Show()
 		return
 	}
 
@@ -375,7 +377,9 @@ func (u *UI) LocationSelector() {
 	// Close on Esc
 	window.Canvas().SetOnTypedKey(func(k *fyne.KeyEvent) {
 		if k.Name == fyne.KeyEscape {
-			window.Close()
+			fyne.Do(func() {
+				window.Close()
+			})
 		}
 	})
 
