@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"adgui/commands"
+	"adgui/locations"
 	"adgui/theme"
 
 	"fyne.io/fyne/v2"
@@ -122,23 +123,23 @@ func (u *UI) updateMenuItems() {
 
 	// Обновляем доступность пунктов меню
 	if u.menu != nil {
-		items := u.menu.Items
-		if u.vpnmgr.IsConnected() {
-			u.menu.Label = "VPN connected"
-			items[0].Icon = theme.MenuConnectedIcon
-			items[0].Label = strings.ToUpper(u.vpnmgr.Location())
-		} else {
-			u.menu.Label = "VPN disconected"
-			items[0].Icon = theme.MenuDisconnectedIcon
-			items[0].Label = "OFF"
-		}
-		connected := u.vpnmgr.IsConnected()
-		items[1].Disabled = false
-		items[2].Disabled = connected  // Connect Auto
-		items[3].Disabled = false      // Connect To... available always
-		items[4].Disabled = !connected // Disconnect
-		u.menu.Items = items
 		fyne.Do(func() {
+			items := u.menu.Items
+			if u.vpnmgr.IsConnected() {
+				u.menu.Label = "VPN connected"
+				items[0].Icon = theme.MenuConnectedIcon
+				items[0].Label = strings.ToUpper(u.vpnmgr.Location())
+			} else {
+				u.menu.Label = "VPN disconected"
+				items[0].Icon = theme.MenuDisconnectedIcon
+				items[0].Label = "OFF"
+			}
+			connected := u.vpnmgr.IsConnected()
+			items[1].Disabled = false
+			items[2].Disabled = connected  // Connect Auto
+			items[3].Disabled = false      // Connect To... available always
+			items[4].Disabled = !connected // Disconnect
+			u.menu.Items = items
 			u.desk.SetSystemTrayMenu(u.menu)
 		})
 	}
@@ -195,6 +196,17 @@ func (u *UI) updateDashboard() {
 	}
 
 	fyne.Do(func() {
+		// Re-check if window is still valid by checking the struct field
+		// This is safe because we are in the main thread where SetOnClosed callbacks run
+		u.dashboardmx.RLock()
+		currentWindow := u.dashboardWindow
+		u.dashboardmx.RUnlock()
+
+		if currentWindow != window {
+			// Window was closed or replaced
+			return
+		}
+
 		if statusLabel != nil {
 			statusLabel.Segments = parseAnsi(u.vpnmgr.Status()).Segments
 			statusLabel.Refresh()
@@ -209,9 +221,10 @@ func (u *UI) Dashboard() string {
 	u.dashboardmx.Lock()
 	defer u.dashboardmx.Unlock()
 
-	// If dashboard window already exists, bring it to front
+	// If dashboard window already exists, we can't simply RequestFocus or Show it
+	// in Wayland without user interaction token. So just ignore or log.
 	if u.dashboardWindow != nil {
-		u.dashboardWindow.Show()
+		// u.dashboardWindow.Show() // This might crash in Wayland if called without interaction
 		return ""
 	}
 
@@ -262,7 +275,8 @@ func (u *UI) Dashboard() string {
 	// Close on Esc
 	window.Canvas().SetOnTypedKey(func(k *fyne.KeyEvent) {
 		if k.Name == fyne.KeyEscape {
-			window.Close()
+			// Close asynchronously to avoid potential event loop conflicts
+			fyne.Do(window.Close)
 		}
 	})
 
@@ -292,92 +306,94 @@ func (u *UI) LocationSelector() {
 	defer u.locationmx.Unlock()
 
 	if u.locationWindow != nil {
-		u.locationWindow.Show()
 		return
 	}
 
-	// Создаем новое окно для выбора локации
-	window := u.Fyne.NewWindow("adgui: select location")
-	window.Resize(fyne.NewSize(640, 720))
-	u.locationWindow = window
+	allLocations := u.vpnmgr.ListLocations()
+	filteredLocations := allLocations
 
-	window.SetOnClosed(func() {
-		u.locationmx.Lock()
-		defer u.locationmx.Unlock()
-		u.locationWindow = nil
-	})
+	fyne.Do(func() {
+		window := u.Fyne.NewWindow("adgui: select location")
+		window.Resize(fyne.NewSize(640, 720))
+		u.locationWindow = window
 
-	locations := u.vpnmgr.ListLocations()
+		window.SetOnClosed(func() {
+			u.locationmx.Lock()
+			defer u.locationmx.Unlock()
+			u.locationWindow = nil
+		})
 
-	table := widget.NewTable(
-		// Return number of rows and columns
-		func() (int, int) {
-			return len(locations), 4
-		},
-		// Create a template widget for cells
-		func() fyne.CanvasObject {
-			return widget.NewLabel("...")
-		},
-		// Create a template widget for cells
-		func(id widget.TableCellID, obj fyne.CanvasObject) {
-			// Update the content of the cell based on its ID
-			label := obj.(*widget.Label)
-			// Формируем заголовок
-			if id.Row == 0 {
+		filterEntry := widget.NewEntry()
+		filterEntry.SetPlaceHolder("Filter by city or country...")
+
+		table := widget.NewTable(
+			func() (int, int) {
+				return len(filteredLocations) + 1, 4 // +1 for header
+			},
+			func() fyne.CanvasObject {
+				return widget.NewLabel("...")
+			},
+			func(id widget.TableCellID, obj fyne.CanvasObject) {
+				label := obj.(*widget.Label)
+				if id.Row == 0 {
+					switch id.Col {
+					case 0:
+						label.SetText("ISO")
+					case 1:
+						label.SetText("Country")
+					case 2:
+						label.SetText("City")
+					case 3:
+						label.SetText("Ping (ms)")
+					}
+					label.TextStyle.Bold = true
+					return
+				}
+
+				loc := filteredLocations[id.Row-1]
 				switch id.Col {
 				case 0:
-					label.SetText("ISO")
+					label.SetText(loc.ISO)
 				case 1:
-					label.SetText("Country")
+					label.SetText(loc.Country)
 				case 2:
-					label.SetText("City")
+					label.SetText(loc.City)
 				case 3:
-					label.SetText("Ping (ms)")
+					label.SetText(strconv.Itoa(loc.Ping))
 				}
-				label.TextStyle.Bold = true
-				return
+				label.TextStyle.Bold = false
+			},
+		)
+
+		table.SetColumnWidth(0, 40)
+		table.SetColumnWidth(1, 200)
+		table.SetColumnWidth(2, 200)
+		table.SetColumnWidth(3, 80)
+
+		table.OnSelected = func(id widget.TableCellID) {
+			if id.Row == 0 {
+				return // Skip header
 			}
-
-			loc := locations[id.Row]
-			switch id.Col {
-			case 0:
-				label.SetText(loc.ISO)
-			case 1:
-				label.SetText(loc.Country)
-			case 2:
-				label.SetText(loc.City)
-			case 3:
-				label.SetText(strconv.Itoa(loc.Ping))
-			}
-			label.TextStyle.Bold = false
-		},
-	)
-
-	// Set column widths (optional)
-	table.SetColumnWidth(0, 30)
-	table.SetColumnWidth(1, 300)
-	table.SetColumnWidth(2, 200)
-	table.SetColumnWidth(3, 30)
-
-	// Обработчик выбора локации
-	table.OnSelected = func(id widget.TableCellID) {
-		if id.Row == 0 {
-			return // just skip header
-		}
-		fmt.Printf("Selected: %+v\n", locations[id.Row])
-		city := locations[id.Row].City
-		go u.vpnmgr.ConnectToLocation(city)
-		window.Close()
-	}
-
-	window.SetContent(container.NewStack(table))
-
-	// Close on Esc
-	window.Canvas().SetOnTypedKey(func(k *fyne.KeyEvent) {
-		if k.Name == fyne.KeyEscape {
+			selectedLocation := filteredLocations[id.Row-1]
+			fmt.Printf("Selected: %+v\n", selectedLocation)
+			go u.vpnmgr.ConnectToLocation(selectedLocation.City)
 			window.Close()
 		}
-	})
 
-	window.Show()
+		filterEntry.OnChanged = func(query string) {
+			filteredLocations = locations.FilterLocations(allLocations, query)
+			table.Refresh()
+		}
+
+		content := container.NewBorder(filterEntry, nil, nil, nil, table)
+		window.SetContent(content)
+
+		window.Canvas().SetOnTypedKey(func(k *fyne.KeyEvent) {
+			if k.Name == fyne.KeyEscape {
+				fyne.Do(window.Close)
+			}
+		})
+
+		window.Show()
+	})
 }

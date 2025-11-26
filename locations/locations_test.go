@@ -279,3 +279,40 @@ func TestFindFastestLocationWithInvalidPing(t *testing.T) {
 		t.Errorf("Expected fastest location to have ping 29, got %d", fastest.Ping)
 	}
 }
+
+// TestFilterLocations tests the FilterLocations function
+func TestFilterLocations(t *testing.T) {
+	locations := []Location{
+		{ISO: "US", Country: "United States", City: "New York", Ping: 121},
+		{ISO: "LV", Country: "Latvia", City: "Riga", Ping: 29},
+		{ISO: "DE", Country: "Germany", City: "Berlin", Ping: 53},
+		{ISO: "DE", Country: "Germany", City: "Frankfurt", Ping: 37},
+	}
+
+	// Test filtering by city
+	filtered := FilterLocations(locations, "york")
+	if len(filtered) != 1 {
+		t.Errorf("Expected 1 location when filtering by 'york', got %d", len(filtered))
+	}
+	if len(filtered) == 1 && filtered[0].City != "New York" {
+		t.Errorf("Expected to find 'New York', got '%s'", filtered[0].City)
+	}
+
+	// Test filtering by country
+	filtered = FilterLocations(locations, "germany")
+	if len(filtered) != 2 {
+		t.Errorf("Expected 2 locations when filtering by 'germany', got %d", len(filtered))
+	}
+
+	// Test filtering with no results
+	filtered = FilterLocations(locations, "nonexistent")
+	if len(filtered) != 0 {
+		t.Errorf("Expected 0 locations for 'nonexistent' query, got %d", len(filtered))
+	}
+
+	// Test with empty query
+	filtered = FilterLocations(locations, "")
+	if len(filtered) != 4 {
+		t.Errorf("Expected all locations for empty query, got %d", len(filtered))
+	}
+}
