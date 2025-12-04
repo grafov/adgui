@@ -413,6 +413,7 @@ func (u *UI) exclusionsPanel() *fyne.Container {
 		if containsIgnoreCase(exclusions, domain) {
 			return
 		}
+		fyne.Do(func() { filterEntry.SetText("") }) // reset filter text on append
 		go func(value string) {
 			if err := u.vpnmgr.AddSiteExclusion(value); err != nil {
 				fmt.Printf("add exclusion error: %v\n", err)
