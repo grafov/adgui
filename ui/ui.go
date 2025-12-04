@@ -268,6 +268,7 @@ func (u *UI) Dashboard() string {
 	tabs := container.NewAppTabs(
 		container.NewTabItem("Connections", connectionsContent),
 		container.NewTabItem("License", license),
+		container.NewTabItem("Excluded", u.exclusionsPanel()),
 	)
 	tabs.SetTabLocation(container.TabLocationLeading)
 	window.SetContent(tabs)
@@ -299,6 +300,118 @@ func (u *UI) licensePanel() *fyne.Container {
 		widget.NewLabel("AdGuard license"),
 		parseAnsi(u.vpnmgr.License()),
 	)
+}
+
+func (u *UI) exclusionsPanel() *fyne.Container {
+	exclusions, err := u.vpnmgr.GetSiteExclusions()
+	if err != nil {
+		fmt.Printf("load exclusions error: %v\n", err)
+	}
+	filtered := exclusions
+	currentQuery := ""
+
+	filterExclusions := func(items []string, query string) []string {
+		if query == "" {
+			return items
+		}
+		lowerQuery := strings.ToLower(query)
+		var res []string
+		for _, item := range items {
+			if strings.Contains(strings.ToLower(item), lowerQuery) {
+				res = append(res, item)
+			}
+		}
+		return res
+	}
+
+	containsIgnoreCase := func(items []string, value string) bool {
+		for _, item := range items {
+			if strings.EqualFold(item, value) {
+				return true
+			}
+		}
+		return false
+	}
+
+	filterEntry := widget.NewEntry()
+	filterEntry.SetPlaceHolder("Filter or enter domain...")
+
+	var exclusionsList *widget.List
+
+	refreshFiltered := func() {
+		filtered = filterExclusions(exclusions, currentQuery)
+		if exclusionsList != nil {
+			exclusionsList.Refresh()
+		}
+	}
+
+	reloadExclusions := func() {
+		go func() {
+			newExclusions, loadErr := u.vpnmgr.GetSiteExclusions()
+			if loadErr != nil {
+				fmt.Printf("reload exclusions error: %v\n", loadErr)
+				return
+			}
+			fyne.Do(func() {
+				exclusions = newExclusions
+				refreshFiltered()
+			})
+		}()
+	}
+
+	exclusionsList = widget.NewList(
+		func() int {
+			return len(filtered)
+		},
+		func() fyne.CanvasObject {
+			label := widget.NewLabel("domain")
+			removeBtn := widget.NewButton("X", nil)
+			return container.NewHBox(label, layout.NewSpacer(), removeBtn)
+		},
+		func(id widget.ListItemID, obj fyne.CanvasObject) {
+			cont := obj.(*fyne.Container)
+			label := cont.Objects[0].(*widget.Label)
+			removeBtn := cont.Objects[2].(*widget.Button)
+
+			domain := filtered[id]
+			label.SetText(domain)
+			removeBtn.OnTapped = func() {
+				go func(target string) {
+					if err := u.vpnmgr.RemoveSiteExclusion(target); err != nil {
+						fmt.Printf("remove exclusion error: %v\n", err)
+						return
+					}
+					reloadExclusions()
+				}(domain)
+			}
+		},
+	)
+
+	filterEntry.OnChanged = func(query string) {
+		currentQuery = query
+		refreshFiltered()
+	}
+
+	appendBtn := widget.NewButton("Append", func() {
+		domain := strings.TrimSpace(filterEntry.Text)
+		if domain == "" {
+			return
+		}
+		if containsIgnoreCase(exclusions, domain) {
+			return
+		}
+		go func(value string) {
+			if err := u.vpnmgr.AddSiteExclusion(value); err != nil {
+				fmt.Printf("add exclusion error: %v\n", err)
+				return
+			}
+			reloadExclusions()
+		}(domain)
+	})
+
+	header := container.NewBorder(nil, nil, nil, appendBtn, filterEntry)
+	content := container.NewBorder(header, nil, nil, nil, exclusionsList)
+	return content
 }
 
 func (u *UI) LocationSelector() {

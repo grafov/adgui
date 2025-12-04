@@ -145,6 +145,49 @@ func (v *VPNManager) License() string {
 	return output
 }
 
+// GetSiteExclusions retrieves the list of excluded domains from the CLI output.
+// It ignores header lines and empty lines, returning a cleaned slice of domain names.
+func (v *VPNManager) GetSiteExclusions() ([]string, error) {
+	output, err := v.executeCommand("site-exclusions", "show")
+	if err != nil {
+		return nil, fmt.Errorf("site-exclusions show failed: %w, output: %s", err, output)
+	}
+
+	lines := strings.Split(output, "\n")
+	var exclusions []string
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		// Skip header lines like "Exclusions for GENERAL mode:"
+		if strings.Contains(strings.ToLower(trimmed), "exclusions for") {
+			continue
+		}
+		// Treat any remaining non-empty line as a domain entry.
+		exclusions = append(exclusions, trimmed)
+	}
+	return exclusions, nil
+}
+
+// AddSiteExclusion appends a domain to the exclusions list via CLI.
+func (v *VPNManager) AddSiteExclusion(domain string) error {
+	output, err := v.executeCommand("site-exclusions", "add", domain)
+	if err != nil {
+		return fmt.Errorf("site-exclusions add failed: %w, output: %s", err, output)
+	}
+	return nil
+}
+
+// RemoveSiteExclusion removes a domain from the exclusions list via CLI.
+func (v *VPNManager) RemoveSiteExclusion(domain string) error {
+	output, err := v.executeCommand("site-exclusions", "remove", domain)
+	if err != nil {
+		return fmt.Errorf("site-exclusions remove failed: %w, output: %s", err, output)
+	}
+	return nil
+}
+
 func (v *VPNManager) statusCheckLoop() {
 	time.Sleep(startDelay)
 	v.checkStatus()
