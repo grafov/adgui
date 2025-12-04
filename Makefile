@@ -77,6 +77,9 @@ install: release-x11 release-wayland
 	$(SUDO) install ./build/adgui-wayland $(PREFIX)
 	$(SUDO) install ./adgui-run $(PREFIX)
 
+deploy: release-wayland release-x11
+	go tool fyne package --target linux --exe build/adgui-wayland --icon ./res/Icon.png --release --tags wayland
+
 .PHONY: sloc
 sloc:
 	cloc * >sloc.stats

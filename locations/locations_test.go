@@ -1,318 +1,289 @@
-package locations
+package locations_test
 
 import (
 	"strings"
-	"testing"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+
+	"adgui/locations"
 )
 
-// TestParseLocationsFromSample tests parsing with the provided list-sample file content
-func TestParseLocationsFromSample(t *testing.T) {
-	// Sample content from the list-sample file
-	sampleContent := `ISO   COUNTRY              CITY                           PING ESTIMATE
-LV    Latvia               Riga                           29        
-DE    Germany              Frankfurt                      37        
-DK    Denmark              Copenhagen                     42        
-NL    Netherlands          Amsterdam                      45        
-IT    Italy                Milan                          46        
-FR    France               Paris                          46        
-CH    Switzerland          Zurich                         47        
-CZ    Czechia              Prague                         47        
-BE    Belgium              Brussels                       49        
-FI    Finland              Helsinki                       50        
-GB    United Kingdom       London                         52        
-AT    Austria              Vienna                         52        
-DE    Germany              Berlin                         53        
-LU    Luxembourg           Luxembourg                     53        
-PL    Poland               Warsaw                         53        
-HR    Croatia              Zagreb                         55        
-SK    Slovakia             Bratislava                     55        
-EE    Estonia              Tallinn                        57        
-UA    Ukraine              Kyiv                           59        
-IE    Ireland              Dublin                         61        
-FR    France               Marseille                      62        
-NO    Norway               Oslo                           63        
+var _ = Describe("Location Parsing", func() {
+	Context("when parsing locations from sample content", func() {
+		It("should parse locations correctly from sample content", func() {
+			// Sample content from the list-sample file
+			sampleContent := `ISO   COUNTRY              CITY                           PING ESTIMATE
+LV    Latvia               Riga                           29
+DE    Germany              Frankfurt                      37
+DK    Denmark              Copenhagen                     42
+NL    Netherlands          Amsterdam                      45
+IT    Italy                Milan                          46
+FR    France               Paris                          46
+CH    Switzerland          Zurich                         47
+CZ    Czechia              Prague                         47
+BE    Belgium              Brussels                       49
+FI    Finland              Helsinki                       50
+GB    United Kingdom       London                         52
+AT    Austria              Vienna                         52
+DE    Germany              Berlin                         53
+LU    Luxembourg           Luxembourg                     53
+PL    Poland               Warsaw                         53
+HR    Croatia              Zagreb                         55
+SK    Slovakia             Bratislava                     55
+EE    Estonia              Tallinn                        57
+UA    Ukraine              Kyiv                           59
+IE    Ireland              Dublin                         61
+FR    France               Marseille                      62
+NO    Norway               Oslo                           63
 RS    Serbia               Belgrade                       63
-ES    Spain                Madrid                         63        
-GB    United Kingdom       Manchester                     67        
-BG    Bulgaria             Sofia                          67        
-SE    Sweden               Stockholm                      68        
-IT    Italy                Rome                           69        
-HU    Hungary              Budapest                       70        
-PT    Portugal             Lisbon                         71        
-RO    Romania              Bucharest                      74        
-EG    Egypt                Cairo                          76        
-ES    Spain                Barcelona                      80        
-GR    Greece               Athens                         85        
-IS    Iceland              Reykjavik                      89        
-MD    Moldova              Chișinău                       89        
-LT    Lithuania            Vilnius                        98        
-TR    Turkey               Istanbul                       99        
-IR    Iran                 Tehran (Virtual)               106       
-IL    Israel               Tel Aviv                       106       
-CY    Cyprus               Nicosia                        109       
-RU    Russia               Moscow (Virtual)               114       
-US    United States        New York                       121       
-CA    Canada               Toronto                        128       
-US    United States        Boston                         129       
-CA    Canada               Montreal                       134       
-US    United States        Chicago                        142       
-US    United States        Atlanta                        143       
-US    United States        Miami                          148       
-US    United States        Dallas                         157       
-AE    UAE                  Dubai                          163       
-US    United States        Denver                         163       
-US    United States        Seattle                        182       
-IT    Italy                Palermo                        187       
-US    United States        Los Angeles                    188       
-US    United States        Las Vegas                      188       
-US    United States        Phoenix                        189       
-CA    Canada               Vancouver                      190       
-MX    Mexico               Mexico City                    190       
-US    United States        Silicon Valley                 192       
-CO    Colombia             Bogota                         203       
-SG    Singapore            Singapore                      208       
-TH    Thailand             Bangkok                        210       
-NG    Nigeria              Lagos                          222       
-PE    Peru                 Lima                           226       
-NP    Nepal                Kathmandu                      250       
-ID    Indonesia            Jakarta                        251       
-BR    Brazil               São Paulo                      252       
-KZ    Kazakhstan           Astana                         256       
-PH    Philippines          Manila                         262       
-TW    Taiwan               Taipei                         263       
-CL    Chile                Santiago                       265       
-KH    Cambodia             Phnom Penh                     268       
-VN    Vietnam              Hanoi                          273       
-AR    Argentina            Buenos Aires                   280       
-IN    India                Mumbai (Virtual)               284       
-ZA    South Africa         Johannesburg                   285       
-HK    Hong Kong            Hong Kong                      286       
-CN    China                Shanghai (Virtual)             288       
-JP    Japan                Tokyo                          304       
-KR    South Korea          Seoul                          310       
-NZ    New Zealand          Auckland                       326       
-AU    Australia            Sydney                         360       
+ES    Spain                Madrid                         63
+GB    United Kingdom       Manchester                     67
+BG    Bulgaria             Sofia                          67
+SE    Sweden               Stockholm                      68
+IT    Italy                Rome                           69
+HU    Hungary              Budapest                       70
+PT    Portugal             Lisbon                         71
+RO    Romania              Bucharest                      74
+EG    Egypt                Cairo                          76
+ES    Spain                Barcelona                      80
+GR    Greece               Athens                         85
+IS    Iceland              Reykjavik                      89
+MD    Moldova              Chișinău                       89
+LT    Lithuania            Vilnius                        98
+TR    Turkey               Istanbul                       99
+IR    Iran                 Tehran (Virtual)               106
+IL    Israel               Tel Aviv                       106
+CY    Cyprus               Nicosia                        109
+RU    Russia               Moscow (Virtual)               114
+US    United States        New York                       121
+CA    Canada               Toronto                        128
+US    United States        Boston                         129
+CA    Canada               Montreal                       134
+US    United States        Chicago                        142
+US    United States        Atlanta                        143
+US    United States        Miami                          148
+US    United States        Dallas                         157
+AE    UAE                  Dubai                          163
+US    United States        Denver                         163
+US    United States        Seattle                        182
+IT    Italy                Palermo                        187
+US    United States        Los Angeles                    188
+US    United States        Las Vegas                      188
+US    United States        Phoenix                        189
+CA    Canada               Vancouver                      190
+MX    Mexico               Mexico City                    190
+US    United States        Silicon Valley                 192
+CO    Colombia             Bogota                         203
+SG    Singapore            Singapore                      208
+TH    Thailand             Bangkok                        210
+NG    Nigeria              Lagos                          222
+PE    Peru                 Lima                           226
+NP    Nepal                Kathmandu                      250
+ID    Indonesia            Jakarta                        251
+BR    Brazil               São Paulo                      252
+KZ    Kazakhstan           Astana                         256
+PH    Philippines          Manila                         262
+TW    Taiwan               Taipei                         263
+CL    Chile                Santiago                       265
+KH    Cambodia             Phnom Penh                     268
+VN    Vietnam              Hanoi                          273
+AR    Argentina            Buenos Aires                   280
+IN    India                Mumbai (Virtual)               284
+ZA    South Africa         Johannesburg                   285
+HK    Hong Kong            Hong Kong                      286
+CN    China                Shanghai (Virtual)             288
+JP    Japan                Tokyo                          304
+KR    South Korea          Seoul                          310
+NZ    New Zealand          Auckland                       326
+AU    Australia            Sydney                         360
+
 
 You can connect to a location by running /opt/adguardvpn_cli/adguardvpn-cli connect -l 'city, country or ISO code'`
 
-	locations := ParseLocations(sampleContent)
+			parsedLocations := locations.ParseLocations(sampleContent)
 
-	// Test that the result is not empty
-	if len(locations) == 0 {
-		t.Error("Expected non-empty locations slice, got empty slice")
-	}
+			// Test that the result is not empty
+			Expect(parsedLocations).ToNot(BeEmpty())
 
-	// Count the number of lines that should result in location entries
-	// (excluding header and non-location lines)
-	expectedCount := 0
-	lines := strings.SplitSeq(sampleContent, "\n")
-	for line := range lines {
-		// Remove ANSI codes for checking
-		cleanLine := strings.ReplaceAll(line, "\x1b[1m", "")
-		cleanLine = strings.ReplaceAll(cleanLine, "\x1b[0m", "")
+			// Count the number of lines that should result in location entries
+			// (excluding header and non-location lines)
+			expectedCount := 0
+			for line := range strings.SplitSeq(sampleContent, "\n") {
+				// Remove ANSI codes for checking
+				cleanLine := strings.ReplaceAll(line, "\x1b[1m", "")
+				cleanLine = strings.ReplaceAll(cleanLine, "\x1b[0m", "")
 
-		if strings.Contains(cleanLine, "COUNTRY") {
-			continue // skip header
-		}
+				if strings.Contains(cleanLine, "COUNTRY") {
+					continue // skip header
+				}
 
-		// Count lines that look like location entries (start with country code)
-		fields := strings.Fields(cleanLine)
-		if len(fields) >= 4 && len(fields[0]) == 2 { // ISO code should be 2 chars
-			expectedCount++
-		}
-	}
-
-	if len(locations) != expectedCount {
-		t.Errorf("Expected %d locations, got %d", expectedCount, len(locations))
-	}
-
-	// Check that all expected countries are present
-	expectedCountries := []string{"Latvia", "Germany", "Denmark", "Netherlands", "Italy", "France", "Switzerland", "Czechia", "Belgium", "Finland", "United Kingdom"}
-	foundCountries := make(map[string]bool)
-	for _, loc := range locations {
-		foundCountries[loc.Country] = true
-	}
-
-	for _, expectedCountry := range expectedCountries {
-		if !foundCountries[expectedCountry] {
-			t.Errorf("Expected to find country %s in parsed locations", expectedCountry)
-		}
-	}
-
-	// Check that specific known locations exist
-	foundRiga := false
-	foundLondon := false
-	for _, loc := range locations {
-		if loc.City == "Riga" && loc.Country == "Latvia" && loc.ISO == "LV" {
-			foundRiga = true
-			if loc.Ping != 29 {
-				t.Errorf("Expected Riga to have ping 29, got %d", loc.Ping)
+				// Count lines that look like location entries (start with country code)
+				fields := strings.Fields(cleanLine)
+				if len(fields) >= 4 && len(fields[0]) == 2 { // ISO code should be 2 chars
+					expectedCount++
+				}
 			}
-		}
-		if strings.Contains(loc.City, "London") && loc.Country == "United Kingdom" {
-			foundLondon = true
-			if loc.Ping != 52 {
-				t.Errorf("Expected London to have ping 52, got %d", loc.Ping)
+
+			Expect(parsedLocations).To(HaveLen(expectedCount))
+
+			// Check that all expected countries are present
+			expectedCountries := []string{"Latvia", "Germany", "Denmark", "Netherlands", "Italy", "France", "Switzerland", "Czechia", "Belgium", "Finland", "United Kingdom"}
+			foundCountries := make(map[string]bool)
+			for _, loc := range parsedLocations {
+				foundCountries[loc.Country] = true
 			}
-		}
-	}
 
-	if !foundRiga {
-		t.Error("Expected to find Riga, Latvia in parsed locations")
-	}
-	if !foundLondon {
-		t.Error("Expected to find London, United Kingdom in parsed locations")
-	}
+			for _, expectedCountry := range expectedCountries {
+				Expect(foundCountries[expectedCountry]).To(BeTrue(), "Expected to find country %s in parsed locations", expectedCountry)
+			}
 
-	// Verify that locations have valid data
-	for i, loc := range locations {
-		if loc.ISO == "" {
-			t.Errorf("Location at index %d has empty ISO code", i)
-		}
-		if loc.Country == "" {
-			t.Errorf("Location at index %d has empty Country", i)
-		}
-		if loc.City == "" {
-			t.Errorf("Location at index %d has empty City", i)
-		}
-	}
-}
+			// Check that specific known locations exist
+			var foundRiga, foundLondon bool
+			for _, loc := range parsedLocations {
+				if loc.City == "Riga" && loc.Country == "Latvia" && loc.ISO == "LV" {
+					foundRiga = true
+					Expect(loc.Ping).To(Equal(29), "Expected Riga to have ping 29")
+				}
+				if strings.Contains(loc.City, "London") && loc.Country == "United Kingdom" {
+					foundLondon = true
+					Expect(loc.Ping).To(Equal(52), "Expected London to have ping 52")
+				}
+			}
 
-// TestParseLocationsWithANSICodes tests parsing when ANSI color codes are present
-func TestParseLocationsWithANSICodes(t *testing.T) {
-	// Content with ANSI codes similar to actual CLI output
-	ansiContent := "\x1b[1mISO   COUNTRY              CITY                           PING ESTIMATE\n\x1b[0mLV    Latvia               Riga                           29        \nDE    Germany              Frankfurt                      37        \n"
+			Expect(foundRiga).To(BeTrue(), "Expected to find Riga, Latvia in parsed locations")
+			Expect(foundLondon).To(BeTrue(), "Expected to find London, United Kingdom in parsed locations")
 
-	locations := ParseLocations(ansiContent)
+			// Verify that locations have valid data
+			for i, loc := range parsedLocations {
+				Expect(loc.ISO).ToNot(BeEmpty(), "Location at index %d has empty ISO code", i)
+				Expect(loc.Country).ToNot(BeEmpty(), "Location at index %d has empty Country", i)
+				Expect(loc.City).ToNot(BeEmpty(), "Location at index %d has empty City", i)
+			}
+		})
+	})
 
-	if len(locations) != 2 {
-		t.Errorf("Expected 2 locations with ANSI codes, got %d", len(locations))
-	}
+	Context("when parsing locations with ANSI codes", func() {
+		It("should correctly handle ANSI codes in input", func() {
+			// Content with ANSI codes similar to actual CLI output
+			ansiContent := "\x1b[1mISO   COUNTRY              CITY                           PING ESTIMATE\n\x1b[0mLV    Latvia               Riga                           29        \nDE    Germany              Frankfurt                      37        \n"
 
-	if len(locations) > 0 {
-		if locations[0].ISO != "LV" || locations[0].Country != "Latvia" || locations[0].City != "Riga" || locations[0].Ping != 29 {
-			t.Errorf("First location has incorrect data: %+v", locations[0])
-		}
-	}
-}
+			parsedLocations := locations.ParseLocations(ansiContent)
 
-// TestParseLocationsEmpty tests parsing empty or invalid input
-func TestParseLocationsEmpty(t *testing.T) {
-	// Test empty string
-	locations := ParseLocations("")
-	if len(locations) != 0 {
-		t.Errorf("Expected empty result for empty input, got %d locations", len(locations))
-	}
+			Expect(parsedLocations).To(HaveLen(2))
 
-	// Test just header
-	locations = ParseLocations("ISO   COUNTRY              CITY                           PING ESTIMATE\n")
-	if len(locations) != 0 {
-		t.Errorf("Expected empty result for header-only input, got %d locations", len(locations))
-	}
+			if len(parsedLocations) > 0 {
+				Expect(parsedLocations[0].ISO).To(Equal("LV"))
+				Expect(parsedLocations[0].Country).To(Equal("Latvia"))
+				Expect(parsedLocations[0].City).To(Equal("Riga"))
+				Expect(parsedLocations[0].Ping).To(Equal(29))
+			}
+		})
+	})
 
-	// Test header with ANSI codes only
-	locations = ParseLocations("\x1b[1mISO   COUNTRY              CITY                           PING ESTIMATE\n\x1b[0m")
-	if len(locations) != 0 {
-		t.Errorf("Expected empty result for header with ANSI codes only, got %d locations", len(locations))
-	}
-}
+	Context("when parsing empty or invalid input", func() {
+		It("should return empty slice for empty input", func() {
+			parsedLocations := locations.ParseLocations("")
+			Expect(parsedLocations).To(BeEmpty())
+		})
 
-// TestParseLocationsSingleLocation tests parsing a single location
-func TestParseLocationsSingleLocation(t *testing.T) {
-	singleLocation := "ISO   COUNTRY              CITY                           PING ESTIMATE\nUS    United States        New York                       121       \n"
+		It("should return empty slice for header-only input", func() {
+			parsedLocations := locations.ParseLocations("ISO   COUNTRY              CITY                           PING ESTIMATE\n")
+			Expect(parsedLocations).To(BeEmpty())
+		})
 
-	locations := ParseLocations(singleLocation)
+		It("should return empty slice for header with ANSI codes only", func() {
+			parsedLocations := locations.ParseLocations("\x1b[1mISO   COUNTRY              CITY                           PING ESTIMATE\n\x1b[0m")
+			Expect(parsedLocations).To(BeEmpty())
+		})
+	})
 
-	if len(locations) != 1 {
-		t.Errorf("Expected 1 location, got %d", len(locations))
-		return
-	}
+	Context("when parsing single location", func() {
+		It("should correctly parse single location", func() {
+			singleLocation := "ISO   COUNTRY              CITY                           PING ESTIMATE\nUS    United States        New York                       121       \n"
 
-	if locations[0].ISO != "US" || locations[0].Country != "United States" || locations[0].City != "New York" || locations[0].Ping != 121 {
-		t.Errorf("Single location has incorrect data: %+v", locations[0])
-	}
-}
+			parsedLocations := locations.ParseLocations(singleLocation)
 
-// TestFindFastestLocation tests the findFastestLocation function
-func TestFindFastestLocation(t *testing.T) {
-	locations := []Location{
-		{ISO: "US", Country: "US", City: "New York", Ping: 121},
-		{ISO: "LV", Country: "Latvia", City: "Riga", Ping: 29},
-		{ISO: "DE", Country: "Germany", City: "Berlin", Ping: 53},
-	}
+			Expect(parsedLocations).To(HaveLen(1))
 
-	fastest := FindFastestLocation(locations)
+			Expect(parsedLocations[0].ISO).To(Equal("US"))
+			Expect(parsedLocations[0].Country).To(Equal("United States"))
+			Expect(parsedLocations[0].City).To(Equal("New York"))
+			Expect(parsedLocations[0].Ping).To(Equal(121))
+		})
+	})
+})
 
-	if fastest == nil {
-		t.Fatal("Expected to find fastest location, got nil")
-	}
+var _ = Describe("FindFastestLocation", func() {
+	Context("when finding the fastest location", func() {
+		It("should return the location with the lowest ping", func() {
+			testLocations := []locations.Location{
+				{ISO: "US", Country: "US", City: "New York", Ping: 121},
+				{ISO: "LV", Country: "Latvia", City: "Riga", Ping: 29},
+				{ISO: "DE", Country: "Germany", City: "Berlin", Ping: 53},
+			}
 
-	if fastest.ISO != "LV" || fastest.Country != "Latvia" || fastest.City != "Riga" || fastest.Ping != 29 {
-		t.Errorf("Fastest location is incorrect: %+v", fastest)
-	}
-}
+			fastest := locations.FindFastestLocation(testLocations)
 
-// TestFindFastestLocationEmpty tests finding fastest location in empty slice
-func TestFindFastestLocationEmpty(t *testing.T) {
-	fastest := FindFastestLocation([]Location{})
+			Expect(fastest).ToNot(BeNil())
+			Expect(fastest.ISO).To(Equal("LV"))
+			Expect(fastest.Country).To(Equal("Latvia"))
+			Expect(fastest.City).To(Equal("Riga"))
+			Expect(fastest.Ping).To(Equal(29))
+		})
 
-	if fastest != nil {
-		t.Errorf("Expected nil for empty slice, got %+v", fastest)
-	}
-}
+		It("should return nil for empty slice", func() {
+			fastest := locations.FindFastestLocation([]locations.Location{})
+			Expect(fastest).To(BeNil())
+		})
 
-// TestFindFastestLocationWithInvalidPing tests finding fastest location when some locations have invalid ping
-func TestFindFastestLocationWithInvalidPing(t *testing.T) {
-	locations := []Location{
-		{ISO: "US", Country: "US", City: "New York", Ping: 9999}, // Invalid ping (9999 is used as default for invalid values)
-		{ISO: "LV", Country: "Latvia", City: "Riga", Ping: 29},
-		{ISO: "DE", Country: "Germany", City: "Berlin", Ping: 53},
-	}
+		It("should handle locations with invalid ping values", func() {
+			testLocations := []locations.Location{
+				{ISO: "US", Country: "US", City: "New York", Ping: 9999}, // Invalid ping (9999 is used as default for invalid values)
+				{ISO: "LV", Country: "Latvia", City: "Riga", Ping: 29},
+				{ISO: "DE", Country: "Germany", City: "Berlin", Ping: 53},
+			}
 
-	fastest := FindFastestLocation(locations)
+			fastest := locations.FindFastestLocation(testLocations)
 
-	if fastest == nil {
-		t.Fatal("Expected to find fastest location, got nil")
-	}
+			Expect(fastest).ToNot(BeNil())
+			Expect(fastest.Ping).To(Equal(29))
+		})
+	})
+})
 
-	if fastest.Ping != 29 {
-		t.Errorf("Expected fastest location to have ping 29, got %d", fastest.Ping)
-	}
-}
+var _ = Describe("FilterLocations", func() {
+	Context("when filtering locations", func() {
+		var testLocations []locations.Location
 
-// TestFilterLocations tests the FilterLocations function
-func TestFilterLocations(t *testing.T) {
-	locations := []Location{
-		{ISO: "US", Country: "United States", City: "New York", Ping: 121},
-		{ISO: "LV", Country: "Latvia", City: "Riga", Ping: 29},
-		{ISO: "DE", Country: "Germany", City: "Berlin", Ping: 53},
-		{ISO: "DE", Country: "Germany", City: "Frankfurt", Ping: 37},
-	}
+		BeforeEach(func() {
+			testLocations = []locations.Location{
+				{ISO: "US", Country: "United States", City: "New York", Ping: 121},
+				{ISO: "LV", Country: "Latvia", City: "Riga", Ping: 29},
+				{ISO: "DE", Country: "Germany", City: "Berlin", Ping: 53},
+				{ISO: "DE", Country: "Germany", City: "Frankfurt", Ping: 37},
+			}
+		})
 
-	// Test filtering by city
-	filtered := FilterLocations(locations, "york")
-	if len(filtered) != 1 {
-		t.Errorf("Expected 1 location when filtering by 'york', got %d", len(filtered))
-	}
-	if len(filtered) == 1 && filtered[0].City != "New York" {
-		t.Errorf("Expected to find 'New York', got '%s'", filtered[0].City)
-	}
+		It("should filter by city name", func() {
+			filtered := locations.FilterLocations(testLocations, "york")
+			Expect(filtered).To(HaveLen(1))
+			Expect(filtered[0].City).To(Equal("New York"))
+		})
 
-	// Test filtering by country
-	filtered = FilterLocations(locations, "germany")
-	if len(filtered) != 2 {
-		t.Errorf("Expected 2 locations when filtering by 'germany', got %d", len(filtered))
-	}
+		It("should filter by country name", func() {
+			filtered := locations.FilterLocations(testLocations, "germany")
+			Expect(filtered).To(HaveLen(2))
+		})
 
-	// Test filtering with no results
-	filtered = FilterLocations(locations, "nonexistent")
-	if len(filtered) != 0 {
-		t.Errorf("Expected 0 locations for 'nonexistent' query, got %d", len(filtered))
-	}
+		It("should return empty slice when no matches found", func() {
+			filtered := locations.FilterLocations(testLocations, "nonexistent")
+			Expect(filtered).To(BeEmpty())
+		})
 
-	// Test with empty query
-	filtered = FilterLocations(locations, "")
-	if len(filtered) != 4 {
-		t.Errorf("Expected all locations for empty query, got %d", len(filtered))
-	}
-}
+		It("should return all locations for empty query", func() {
+			filtered := locations.FilterLocations(testLocations, "")
+			Expect(filtered).To(HaveLen(4))
+		})
+	})
+})
