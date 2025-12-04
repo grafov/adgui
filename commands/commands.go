@@ -19,6 +19,30 @@ const (
 	statusConnectedTo  = "Successfully Connected to"
 )
 
+// SiteExclusionMode represents CLI exclusion mode.
+type SiteExclusionMode string
+
+const (
+	SiteExclusionModeGeneral   SiteExclusionMode = "general"
+	SiteExclusionModeSelective SiteExclusionMode = "selective"
+)
+
+func (m SiteExclusionMode) String() string {
+	return string(m)
+}
+
+func parseSiteExclusionMode(line string) SiteExclusionMode {
+	lower := strings.ToLower(line)
+	switch {
+	case strings.Contains(lower, "selective"):
+		return SiteExclusionModeSelective
+	case strings.Contains(lower, "general"):
+		return SiteExclusionModeGeneral
+	default:
+		return SiteExclusionModeGeneral
+	}
+}
+
 type VPNManager struct {
 	statusTicker   *time.Ticker
 	onStatusChange func()
@@ -145,29 +169,30 @@ func (v *VPNManager) License() string {
 	return output
 }
 
-// GetSiteExclusions retrieves the list of excluded domains from the CLI output.
-// It ignores header lines and empty lines, returning a cleaned slice of domain names.
-func (v *VPNManager) GetSiteExclusions() ([]string, error) {
+// GetSiteExclusions retrieves current exclusion mode and domain list from CLI output.
+func (v *VPNManager) GetSiteExclusions() (SiteExclusionMode, []string, error) {
 	output, err := v.executeCommand("site-exclusions", "show")
 	if err != nil {
-		return nil, fmt.Errorf("site-exclusions show failed: %w, output: %s", err, output)
+		return SiteExclusionModeGeneral, nil, fmt.Errorf("site-exclusions show failed: %w, output: %s", err, output)
 	}
 
 	lines := strings.Split(output, "\n")
+	mode := SiteExclusionModeGeneral
 	var exclusions []string
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
 		if trimmed == "" {
 			continue
 		}
-		// Skip header lines like "Exclusions for GENERAL mode:"
+		// Parse header lines like "Exclusions for GENERAL mode:"
 		if strings.Contains(strings.ToLower(trimmed), "exclusions for") {
+			mode = parseSiteExclusionMode(trimmed)
 			continue
 		}
 		// Treat any remaining non-empty line as a domain entry.
 		exclusions = append(exclusions, trimmed)
 	}
-	return exclusions, nil
+	return mode, exclusions, nil
 }
 
 // AddSiteExclusion appends a domain to the exclusions list via CLI.
@@ -184,6 +209,23 @@ func (v *VPNManager) RemoveSiteExclusion(domain string) error {
 	output, err := v.executeCommand("site-exclusions", "remove", domain)
 	if err != nil {
 		return fmt.Errorf("site-exclusions remove failed: %w, output: %s", err, output)
+	}
+	return nil
+}
+
+// SetSiteExclusionsMode switches mode and re-applies provided domains.
+func (v *VPNManager) SetSiteExclusionsMode(mode SiteExclusionMode, domains []string) error {
+	output, err := v.executeCommand("site-exclusions", "mode", mode.String())
+	if err != nil {
+		return fmt.Errorf("site-exclusions mode %s failed: %w, output: %s", mode, err, output)
+	}
+	for _, domain := range domains {
+		if strings.TrimSpace(domain) == "" {
+			continue
+		}
+		if err := v.AddSiteExclusion(domain); err != nil {
+			return fmt.Errorf("re-applying domain %s failed: %w", domain, err)
+		}
 	}
 	return nil
 }

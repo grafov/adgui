@@ -268,7 +268,7 @@ func (u *UI) Dashboard() string {
 	tabs := container.NewAppTabs(
 		container.NewTabItem("Connections", connectionsContent),
 		container.NewTabItem("License", license),
-		container.NewTabItem("Excluded", u.exclusionsPanel()),
+		container.NewTabItem("Domains", u.exclusionsPanel()),
 	)
 	tabs.SetTabLocation(container.TabLocationLeading)
 	window.SetContent(tabs)
@@ -303,7 +303,7 @@ func (u *UI) licensePanel() *fyne.Container {
 }
 
 func (u *UI) exclusionsPanel() *fyne.Container {
-	exclusions, err := u.vpnmgr.GetSiteExclusions()
+	mode, exclusions, err := u.vpnmgr.GetSiteExclusions()
 	if err != nil {
 		fmt.Printf("load exclusions error: %v\n", err)
 	}
@@ -337,6 +337,11 @@ func (u *UI) exclusionsPanel() *fyne.Container {
 	filterEntry.SetPlaceHolder("Filter or enter domain...")
 
 	var exclusionsList *widget.List
+	var modeRadio *widget.RadioGroup
+	const (
+		optionGeneral   = "The domains in the list excluded"
+		optionSelective = "Only domains in the list included"
+	)
 
 	refreshFiltered := func() {
 		filtered = filterExclusions(exclusions, currentQuery)
@@ -347,13 +352,21 @@ func (u *UI) exclusionsPanel() *fyne.Container {
 
 	reloadExclusions := func() {
 		go func() {
-			newExclusions, loadErr := u.vpnmgr.GetSiteExclusions()
+			newMode, newExclusions, loadErr := u.vpnmgr.GetSiteExclusions()
 			if loadErr != nil {
 				fmt.Printf("reload exclusions error: %v\n", loadErr)
 				return
 			}
 			fyne.Do(func() {
+				mode = newMode
 				exclusions = newExclusions
+				if modeRadio != nil {
+					if mode == commands.SiteExclusionModeGeneral {
+						modeRadio.SetSelected(optionGeneral)
+					} else {
+						modeRadio.SetSelected(optionSelective)
+					}
+				}
 				refreshFiltered()
 			})
 		}()
@@ -409,8 +422,46 @@ func (u *UI) exclusionsPanel() *fyne.Container {
 		}(domain)
 	})
 
+	modeRadio = widget.NewRadioGroup([]string{optionGeneral, optionSelective}, nil)
+	if mode == commands.SiteExclusionModeGeneral {
+		modeRadio.SetSelected(optionGeneral)
+	} else {
+		modeRadio.SetSelected(optionSelective)
+	}
+	modeRadio.OnChanged = func(value string) {
+		targetMode := commands.SiteExclusionModeSelective
+		if value == optionGeneral {
+			targetMode = commands.SiteExclusionModeGeneral
+		}
+		if targetMode == mode {
+			return
+		}
+		previousMode := mode
+		modeRadio.Disable()
+		snapshot := append([]string(nil), exclusions...)
+		go func() {
+			defer fyne.Do(modeRadio.Enable)
+			if err := u.vpnmgr.SetSiteExclusionsMode(targetMode, snapshot); err != nil {
+				fmt.Printf("set exclusions mode error: %v\n", err)
+				fyne.Do(func() {
+					if previousMode == commands.SiteExclusionModeGeneral {
+						modeRadio.SetSelected(optionGeneral)
+					} else {
+						modeRadio.SetSelected(optionSelective)
+					}
+				})
+				return
+			}
+			fyne.Do(func() {
+				mode = targetMode
+			})
+			reloadExclusions()
+		}()
+	}
+	modeControls := container.NewVBox(modeRadio)
+
 	header := container.NewBorder(nil, nil, nil, appendBtn, filterEntry)
-	content := container.NewBorder(header, nil, nil, nil, exclusionsList)
+	content := container.NewBorder(header, modeControls, nil, nil, exclusionsList)
 	return content
 }
 
