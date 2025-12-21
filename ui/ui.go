@@ -710,6 +710,26 @@ func (u *UI) LocationSelector() {
 	allLocations := u.vpnmgr.ListLocations()
 	filteredLocations := allLocations
 
+	// Состояние сортировки
+	sortColumn := locations.SortByPing
+	sortAscending := true
+
+	// Функция для получения заголовка с индикатором сортировки
+	getHeaderText := func(col int, currentSortCol locations.SortColumn, ascending bool) string {
+		headers := []string{"ISO", "Country", "City", "Ping (ms)"}
+		colToSort := []locations.SortColumn{locations.SortByISO, locations.SortByCountry, locations.SortByCity, locations.SortByPing}
+
+		text := headers[col]
+		if colToSort[col] == currentSortCol {
+			if ascending {
+				text += " ▲"
+			} else {
+				text += " ▼"
+			}
+		}
+		return text
+	}
+
 	fyne.Do(func() {
 		window := u.Fyne.NewWindow("adgui: select location")
 		window.Resize(fyne.NewSize(640, 720))
@@ -724,7 +744,8 @@ func (u *UI) LocationSelector() {
 		filterEntry := widget.NewEntry()
 		filterEntry.SetPlaceHolder("Filter by city or country...")
 
-		table := widget.NewTable(
+		var table *widget.Table
+		table = widget.NewTable(
 			func() (int, int) {
 				return len(filteredLocations) + 1, 4 // +1 for header
 			},
@@ -734,16 +755,7 @@ func (u *UI) LocationSelector() {
 			func(id widget.TableCellID, obj fyne.CanvasObject) {
 				label := obj.(*widget.Label)
 				if id.Row == 0 {
-					switch id.Col {
-					case 0:
-						label.SetText("ISO")
-					case 1:
-						label.SetText("Country")
-					case 2:
-						label.SetText("City")
-					case 3:
-						label.SetText("Ping (ms)")
-					}
+					label.SetText(getHeaderText(id.Col, sortColumn, sortAscending))
 					label.TextStyle.Bold = true
 					return
 				}
@@ -763,14 +775,30 @@ func (u *UI) LocationSelector() {
 			},
 		)
 
-		table.SetColumnWidth(0, 40)
+		table.SetColumnWidth(0, 60)
 		table.SetColumnWidth(1, 200)
 		table.SetColumnWidth(2, 200)
-		table.SetColumnWidth(3, 80)
+		table.SetColumnWidth(3, 100)
 
 		table.OnSelected = func(id widget.TableCellID) {
 			if id.Row == 0 {
-				return // Skip header
+				// Клик на заголовок - сортировка
+				colToSort := []locations.SortColumn{locations.SortByISO, locations.SortByCountry, locations.SortByCity, locations.SortByPing}
+				clickedColumn := colToSort[id.Col]
+
+				if clickedColumn == sortColumn {
+					// Тот же столбец - переключаем направление
+					sortAscending = !sortAscending
+				} else {
+					// Другой столбец - сортировка по возрастанию
+					sortColumn = clickedColumn
+					sortAscending = true
+				}
+
+				filteredLocations = locations.SortLocations(filteredLocations, sortColumn, sortAscending)
+				table.UnselectAll()
+				table.Refresh()
+				return
 			}
 			selectedLocation := filteredLocations[id.Row-1]
 			fmt.Printf("Selected: %+v\n", selectedLocation)
@@ -780,6 +808,7 @@ func (u *UI) LocationSelector() {
 
 		filterEntry.OnChanged = func(query string) {
 			filteredLocations = locations.FilterLocations(allLocations, query)
+			filteredLocations = locations.SortLocations(filteredLocations, sortColumn, sortAscending)
 			table.Refresh()
 		}
 

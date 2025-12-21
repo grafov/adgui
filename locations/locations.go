@@ -14,6 +14,44 @@ type Location struct {
 	Ping    int
 }
 
+// SortColumn определяет столбец для сортировки
+type SortColumn int
+
+const (
+	SortByISO SortColumn = iota
+	SortByCountry
+	SortByCity
+	SortByPing
+)
+
+// SortLocations сортирует локации по указанному столбцу
+func SortLocations(locs []Location, column SortColumn, ascending bool) []Location {
+	result := make([]Location, len(locs))
+	copy(result, locs)
+
+	sort.Slice(result, func(i, j int) bool {
+		var less bool
+		switch column {
+		case SortByISO:
+			less = strings.ToLower(result[i].ISO) < strings.ToLower(result[j].ISO)
+		case SortByCountry:
+			less = strings.ToLower(result[i].Country) < strings.ToLower(result[j].Country)
+		case SortByCity:
+			less = strings.ToLower(result[i].City) < strings.ToLower(result[j].City)
+		case SortByPing:
+			less = result[i].Ping < result[j].Ping
+		default:
+			less = result[i].Ping < result[j].Ping
+		}
+		if ascending {
+			return less
+		}
+		return !less
+	})
+
+	return result
+}
+
 // ParseLocations парсит вывод команды list-locations
 func ParseLocations(output string) []Location {
 	lines := strings.Split(output, "\n")
