@@ -1,8 +1,11 @@
 package ui
 
 import (
+	"bufio"
 	"fmt"
 	"image/color"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -15,6 +18,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
@@ -461,8 +465,237 @@ func (u *UI) exclusionsPanel() *fyne.Container {
 	}
 	modeControls := container.NewVBox(modeRadio)
 
+	exportBtn := widget.NewButton("Export", func() {
+		entry := widget.NewEntry()
+		entry.SetPlaceHolder("Filename")
+
+		home, err := os.UserHomeDir()
+		if err != nil {
+			dialog.ShowError(err, u.dashboardWindow)
+			return
+		}
+		dir := filepath.Join(home, ".local", "share", "adgui", "site-exclusions")
+
+		// Read existing files
+		var existingFiles []string
+		if entries, err := os.ReadDir(dir); err == nil {
+			for _, e := range entries {
+				if !e.IsDir() {
+					existingFiles = append(existingFiles, e.Name())
+				}
+			}
+		}
+
+		var d dialog.Dialog
+		var performWrite func(string, bool, string)
+
+		performWrite = func(fPath string, appendMode bool, name string) {
+			var f *os.File
+			var err error
+			if appendMode {
+				f, err = os.OpenFile(fPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+			} else {
+				f, err = os.Create(fPath)
+			}
+			if err != nil {
+				dialog.ShowError(err, u.dashboardWindow)
+				return
+			}
+			defer f.Close()
+
+			content := strings.Join(filtered, "\n")
+			if content != "" {
+				if appendMode {
+					// Add newline before content if file exists and not empty
+					stat, _ := f.Stat()
+					if stat.Size() > 0 {
+						content = "\n" + content
+					}
+				}
+				if _, err := f.WriteString(content); err != nil {
+					dialog.ShowError(err, u.dashboardWindow)
+					return
+				}
+			}
+
+			d.Hide()
+			mode := "Overwritten"
+			if appendMode {
+				mode = "Appended to"
+			}
+			dialog.ShowInformation("Export", mode+" "+name, u.dashboardWindow)
+		}
+
+		doExport := func(appendMode bool) {
+			name := strings.TrimSpace(entry.Text)
+			if name == "" || strings.Contains(name, "/") || strings.Contains(name, "\\") {
+				dialog.ShowError(fmt.Errorf("invalid filename"), u.dashboardWindow)
+				return
+			}
+
+			if err := os.MkdirAll(dir, 0755); err != nil {
+				dialog.ShowError(err, u.dashboardWindow)
+				return
+			}
+
+			fPath := filepath.Join(dir, name)
+
+			// Check if file exists for overwrite mode
+			if !appendMode {
+				if _, err := os.Stat(fPath); err == nil {
+					// File exists, ask for confirmation
+					d.Hide()
+					dialog.ShowConfirm("Overwrite", "File '"+name+"' already exists. Overwrite?", func(ok bool) {
+						if !ok {
+							d.Show()
+							return
+						}
+						// Proceed with overwrite
+						performWrite(fPath, appendMode, name)
+					}, u.dashboardWindow)
+					return
+				}
+			}
+
+			// Proceed directly if append mode or file doesn't exist
+			performWrite(fPath, appendMode, name)
+		}
+
+		appendBtn := widget.NewButton("Append", func() {
+			doExport(true)
+		})
+		overwriteBtn := widget.NewButton("Overwrite", func() {
+			doExport(false)
+		})
+
+		buttons := container.NewHBox(appendBtn, overwriteBtn)
+
+		var fileList *widget.List
+		if len(existingFiles) > 0 {
+			fileList = widget.NewList(
+				func() int { return len(existingFiles) },
+				func() fyne.CanvasObject { return widget.NewLabel("template") },
+				func(id widget.ListItemID, obj fyne.CanvasObject) {
+					obj.(*widget.Label).SetText(existingFiles[id])
+				},
+			)
+			fileList.OnSelected = func(id widget.ListItemID) {
+				entry.SetText(existingFiles[id])
+				fileList.UnselectAll()
+			}
+		}
+
+		var content *fyne.Container
+		if fileList != nil {
+			fileScroll := container.NewScroll(fileList)
+			fileScroll.SetMinSize(fyne.NewSize(300, 150))
+			content = container.NewVBox(
+				widget.NewLabel("Export to ~/.local/share/adgui/site-exclusions/"),
+				widget.NewLabel("Existing files:"),
+				fileScroll,
+				entry,
+				buttons,
+			)
+		} else {
+			content = container.NewVBox(
+				widget.NewLabel("Export to ~/.local/share/adgui/site-exclusions/"),
+				entry,
+				buttons,
+			)
+		}
+
+		d = dialog.NewCustom("Export", "Cancel", content, u.dashboardWindow)
+		d.Resize(fyne.NewSize(400, 500))
+		d.Show()
+	})
+
+	importBtn := widget.NewButton("Import", func() {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			dialog.ShowError(err, u.dashboardWindow)
+			return
+		}
+		dir := filepath.Join(home, ".local", "share", "adgui", "site-exclusions")
+
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			if os.IsNotExist(err) {
+				dialog.ShowInformation("Import", "No directory "+dir, u.dashboardWindow)
+				return
+			}
+			dialog.ShowError(err, u.dashboardWindow)
+			return
+		}
+
+		var files []string
+		for _, e := range entries {
+			if !e.IsDir() {
+				files = append(files, e.Name())
+			}
+		}
+
+		if len(files) == 0 {
+			dialog.ShowInformation("Import", "No files found in "+dir, u.dashboardWindow)
+			return
+		}
+
+		list := widget.NewList(
+			func() int { return len(files) },
+			func() fyne.CanvasObject { return widget.NewLabel("template") },
+			func(id widget.ListItemID, obj fyne.CanvasObject) {
+				obj.(*widget.Label).SetText(files[id])
+			},
+		)
+
+		var d dialog.Dialog
+		list.OnSelected = func(id widget.ListItemID) {
+			d.Hide()
+			fname := files[id]
+			fPath := filepath.Join(dir, fname)
+
+			f, err := os.Open(fPath)
+			if err != nil {
+				dialog.ShowError(err, u.dashboardWindow)
+				return
+			}
+			defer f.Close()
+
+			scanner := bufio.NewScanner(f)
+			var toAdd []string
+			for scanner.Scan() {
+				line := strings.TrimSpace(scanner.Text())
+				if line != "" && !containsIgnoreCase(exclusions, line) {
+					toAdd = append(toAdd, line)
+				}
+			}
+
+			if len(toAdd) > 0 {
+				progress := dialog.NewProgressInfinite("Importing", "Adding "+strconv.Itoa(len(toAdd))+" domains...", u.dashboardWindow)
+				progress.Show()
+				go func() {
+					defer progress.Hide()
+					for _, domain := range toAdd {
+						u.vpnmgr.AddSiteExclusion(domain)
+					}
+					reloadExclusions()
+				}()
+			} else {
+				dialog.ShowInformation("Import", "No new unique domains found", u.dashboardWindow)
+			}
+		}
+
+		scroll := container.NewScroll(list)
+		scroll.SetMinSize(fyne.NewSize(300, 400))
+		d = dialog.NewCustom("Import from "+dir, "Close", scroll, u.dashboardWindow)
+		d.Resize(fyne.NewSize(400, 500))
+		d.Show()
+	})
+
 	header := container.NewBorder(nil, nil, nil, appendBtn, filterEntry)
-	content := container.NewBorder(header, modeControls, nil, nil, exclusionsList)
+	bottomButtons := container.NewHBox(importBtn, exportBtn)
+	bottomControls := container.NewBorder(nil, nil, modeControls, bottomButtons)
+
+	content := container.NewBorder(header, bottomControls, nil, nil, exclusionsList)
 	return content
 }
 
