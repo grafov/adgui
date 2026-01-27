@@ -33,8 +33,9 @@ build:
 	$(foreach dir,$(wildcard cmd/*), $(GOBUILD) $(FLAGS) -o $(BINDIR)/ ./$(dir);)
 
 .PHONY: release-wayland
-release-wayland: # default build for Wayland
-	go tool fyne build -o build/adgui-wayland --release --tags wayland ./cmd/adgui
+release-wayland: # default build for Wayland (broken yet)
+	# go tool fyne build -o build/adgui-wayland --release --tags wayland ./cmd/adgui
+	go tool fyne build -o build/adgui-wayland --release --tags x11 ./cmd/adgui
 
 .PHONY: release-x11
 release-x11: # build for X11/XLibre

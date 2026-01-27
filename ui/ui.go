@@ -691,8 +691,89 @@ func (u *UI) exclusionsPanel() *fyne.Container {
 		d.Show()
 	})
 
+	var clearBtn *widget.Button
+	clearBtn = widget.NewButton("Clear", func() {
+		if len(exclusions) == 0 {
+			return
+		}
+
+		dialog.ShowConfirm("Clear", "Clear all domains in the list?", func(ok bool) {
+			if !ok {
+				return
+			}
+
+			// Create a copy of the current exclusions to operate on
+			snapshot := append([]string(nil), exclusions...)
+
+			// Disable the button during operation to prevent multiple clicks
+			fyne.Do(func() {
+				clearBtn.Disable()
+			})
+
+			// Show progress dialog
+			progress := dialog.NewProgressInfinite("Clearing", "Removing "+strconv.Itoa(len(snapshot))+" domains...", u.dashboardWindow)
+			progress.Show()
+
+			go func() {
+				defer func() {
+					// Re-enable button and hide progress
+					fyne.Do(func() {
+						clearBtn.Enable()
+						progress.Hide()
+					})
+				}()
+
+				for _, domain := range snapshot {
+					if err := u.vpnmgr.RemoveSiteExclusion(domain); err != nil {
+						fmt.Printf("remove exclusion error: %v\n", err)
+					}
+				}
+				reloadExclusions()
+			}()
+		}, u.dashboardWindow)
+	})
+
+	// Initially disable clear button if list is empty
+	if len(exclusions) == 0 {
+		clearBtn.Disable()
+	}
+
+	updateClearButtonState := func() {
+		fyne.Do(func() {
+			if len(exclusions) == 0 {
+				clearBtn.Disable()
+			} else {
+				clearBtn.Enable()
+			}
+		})
+	}
+
+	// Override reloadExclusions to update button state after refresh
+	reloadExclusions = func() {
+		go func() {
+			newMode, newExclusions, loadErr := u.vpnmgr.GetSiteExclusions()
+			if loadErr != nil {
+				fmt.Printf("reload exclusions error: %v\n", loadErr)
+				return
+			}
+			fyne.Do(func() {
+				mode = newMode
+				exclusions = newExclusions
+				if modeRadio != nil {
+					if mode == commands.SiteExclusionModeGeneral {
+						modeRadio.SetSelected(optionGeneral)
+					} else {
+						modeRadio.SetSelected(optionSelective)
+					}
+				}
+				refreshFiltered()
+				updateClearButtonState()
+			})
+		}()
+	}
+
 	header := container.NewBorder(nil, nil, nil, appendBtn, filterEntry)
-	bottomButtons := container.NewHBox(importBtn, exportBtn)
+	bottomButtons := container.NewHBox(importBtn, exportBtn, clearBtn)
 	bottomControls := container.NewBorder(nil, nil, modeControls, bottomButtons)
 
 	content := container.NewBorder(header, bottomControls, nil, nil, exclusionsList)
