@@ -71,4 +71,3 @@ example.com
 subdomain.example.org
 another-site.net
 ```
-

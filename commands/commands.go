@@ -49,10 +49,11 @@ type VPNManager struct {
 	checkReqs      chan struct{}
 
 	// all below protected by mutex
-	statemx     sync.Mutex
-	status      string
-	location    string
-	isConnected bool
+	statemx            sync.Mutex
+	status             string
+	location           string
+	isConnected        bool
+	siteExclusionsMode SiteExclusionMode
 }
 
 func New() *VPNManager {
@@ -77,6 +78,15 @@ func (v *VPNManager) IsConnected() bool {
 	v.statemx.Lock()
 	defer v.statemx.Unlock()
 	return v.isConnected
+}
+
+func (v *VPNManager) SiteExclusionsMode() SiteExclusionMode {
+	v.statemx.Lock()
+	defer v.statemx.Unlock()
+	if v.siteExclusionsMode == "" {
+		return SiteExclusionModeGeneral
+	}
+	return v.siteExclusionsMode
 }
 
 func (v *VPNManager) SetStatusChangeCallback(callback func()) {
@@ -192,6 +202,9 @@ func (v *VPNManager) GetSiteExclusions() (SiteExclusionMode, []string, error) {
 		// Treat any remaining non-empty line as a domain entry.
 		exclusions = append(exclusions, trimmed)
 	}
+	v.statemx.Lock()
+	v.siteExclusionsMode = mode
+	v.statemx.Unlock()
 	return mode, exclusions, nil
 }
 
@@ -227,6 +240,9 @@ func (v *VPNManager) SetSiteExclusionsMode(mode SiteExclusionMode, domains []str
 			return fmt.Errorf("re-applying domain %s failed: %w", domain, err)
 		}
 	}
+	v.statemx.Lock()
+	v.siteExclusionsMode = mode
+	v.statemx.Unlock()
 	return nil
 }
 

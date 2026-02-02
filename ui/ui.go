@@ -83,6 +83,16 @@ func New(vpnmgr *commands.VPNManager) *UI {
 			default:
 			}
 		})
+		go func() {
+			if _, _, err := vpnmgr.GetSiteExclusions(); err != nil {
+				fmt.Printf("load exclusions mode error: %v\n", err)
+				return
+			}
+			select {
+			case ui.updateReqs <- struct{}{}:
+			default:
+			}
+		}()
 	} else {
 		fmt.Println("System tray not supported")
 	}
@@ -132,7 +142,11 @@ func (u *UI) updateMenuItems() {
 			if u.vpnmgr.IsConnected() {
 				u.menu.Label = "VPN connected"
 				items[0].Icon = theme.MenuConnectedIcon
-				items[0].Label = strings.ToUpper(u.vpnmgr.Location())
+				modeSuffix := "GEN"
+				if u.vpnmgr.SiteExclusionsMode() == commands.SiteExclusionModeSelective {
+					modeSuffix = "SEL"
+				}
+				items[0].Label = fmt.Sprintf("%s mode:%s", strings.ToUpper(u.vpnmgr.Location()), modeSuffix)
 			} else {
 				u.menu.Label = "VPN disconected"
 				items[0].Icon = theme.MenuDisconnectedIcon
@@ -460,6 +474,10 @@ func (u *UI) exclusionsPanel() *fyne.Container {
 			fyne.Do(func() {
 				mode = targetMode
 			})
+			select {
+			case u.updateReqs <- struct{}{}:
+			default:
+			}
 			reloadExclusions()
 		}()
 	}
