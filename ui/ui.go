@@ -30,6 +30,8 @@ var (
 	WarningColor      = color.NRGBA{R: 255, G: 255, B: 0, A: 255}   // Желтый
 )
 
+const domainsTabIndex = 2
+
 type (
 	// Properties related to UI.
 	UI struct {
@@ -37,14 +39,17 @@ type (
 		desk       desktop.App
 		updateReqs chan struct{}
 		// protected by mutex
-		traymx sync.RWMutex
-		menu   *fyne.Menu
+		traymx          sync.RWMutex
+		menu            *fyne.Menu
+		domainsMenuItem *fyne.MenuItem
+		domainsCount    int
 
 		// Dashboard window and widgets for live updates
 		dashboardmx          sync.RWMutex
 		dashboardWindow      fyne.Window
 		dashboardStatusLabel *widget.RichText
 		dashboardConnectBtn  *widget.Button
+		dashboardTabs        *container.AppTabs
 
 		// Location selector window
 		locationmx     sync.RWMutex
@@ -84,14 +89,12 @@ func New(vpnmgr *commands.VPNManager) *UI {
 			}
 		})
 		go func() {
-			if _, _, err := vpnmgr.GetSiteExclusions(); err != nil {
+			_, exclusions, err := vpnmgr.GetSiteExclusions()
+			if err != nil {
 				fmt.Printf("load exclusions mode error: %v\n", err)
 				return
 			}
-			select {
-			case ui.updateReqs <- struct{}{}:
-			default:
-			}
+			ui.setDomainsCount(len(exclusions))
 		}()
 	} else {
 		fmt.Println("System tray not supported")
@@ -108,7 +111,7 @@ func (u *UI) createTrayMenu() {
 	dashboard := fyne.NewMenuItem("Show dashboard", func() {
 		u.Dashboard()
 	})
-	connectAuto := fyne.NewMenuItem("Connect Auto", func() {
+	connectAuto := fyne.NewMenuItem("Connect the best", func() {
 		u.vpnmgr.ConnectAuto()
 	})
 	connectTo := fyne.NewMenuItem("Connect To...", func() {
@@ -117,11 +120,16 @@ func (u *UI) createTrayMenu() {
 	disconnect := fyne.NewMenuItem("Disconnect", func() {
 		u.vpnmgr.Disconnect()
 	})
+	domains := fyne.NewMenuItem(domainsMenuLabel(u.getDomainsCount()), func() {
+		u.showDashboardTab(domainsTabIndex)
+	})
+	u.domainsMenuItem = domains
 	u.menu = fyne.NewMenu("AdGuard VPN Client",
 		status,
 		dashboard,
 		connectAuto,
 		connectTo,
+		domains,
 		fyne.NewMenuItemSeparator(),
 		disconnect,
 	)
@@ -137,6 +145,8 @@ func (u *UI) updateMenuItems() {
 
 	// Обновляем доступность пунктов меню
 	if u.menu != nil {
+		domainsCount := u.domainsCount
+		domainsMenuItem := u.domainsMenuItem
 		fyne.Do(func() {
 			items := u.menu.Items
 			if u.vpnmgr.IsConnected() {
@@ -153,10 +163,13 @@ func (u *UI) updateMenuItems() {
 				items[0].Label = "OFF"
 			}
 			connected := u.vpnmgr.IsConnected()
+			if domainsMenuItem != nil {
+				domainsMenuItem.Label = domainsMenuLabel(domainsCount)
+			}
 			items[1].Disabled = false
-			items[2].Disabled = connected  // Connect Auto
-			items[3].Disabled = false      // Connect To... available always
-			items[4].Disabled = !connected // Disconnect
+			items[3].Disabled = connected  // Connect Auto
+			items[4].Disabled = false      // Connect To... available always
+			items[6].Disabled = !connected // Disconnect
 			u.menu.Items = items
 			u.desk.SetSystemTrayMenu(u.menu)
 		})
@@ -186,6 +199,50 @@ func (u *UI) updateTrayIcon() {
 		} else {
 			u.desk.SetSystemTrayIcon(theme.DisconnectedIcon)
 		}
+	})
+}
+
+func (u *UI) setDomainsCount(count int) {
+	u.traymx.Lock()
+	u.domainsCount = count
+	u.traymx.Unlock()
+	select {
+	case u.updateReqs <- struct{}{}:
+	default:
+	}
+}
+
+func (u *UI) getDomainsCount() int {
+	u.traymx.RLock()
+	count := u.domainsCount
+	u.traymx.RUnlock()
+	return count
+}
+
+func domainsMenuLabel(count int) string {
+	if count > 0 {
+		return fmt.Sprintf("Domains (%d)", count)
+	}
+	return "Domains"
+}
+
+func (u *UI) showDashboardTab(index int) {
+	u.Dashboard()
+	u.selectDashboardTab(index)
+}
+
+func (u *UI) selectDashboardTab(index int) {
+	u.dashboardmx.RLock()
+	tabs := u.dashboardTabs
+	u.dashboardmx.RUnlock()
+	if tabs == nil {
+		return
+	}
+	fyne.Do(func() {
+		if index < 0 || index >= len(tabs.Items) {
+			return
+		}
+		tabs.SelectIndex(index)
 	})
 }
 
@@ -288,6 +345,7 @@ func (u *UI) Dashboard() string {
 		container.NewTabItem("License", license),
 		container.NewTabItem("Domains", u.exclusionsPanel()),
 	)
+	u.dashboardTabs = tabs
 	tabs.SetTabLocation(container.TabLocationLeading)
 	window.SetContent(tabs)
 
@@ -306,6 +364,7 @@ func (u *UI) Dashboard() string {
 		u.dashboardWindow = nil
 		u.dashboardStatusLabel = nil
 		u.dashboardConnectBtn = nil
+		u.dashboardTabs = nil
 	})
 
 	window.Show()
@@ -325,6 +384,7 @@ func (u *UI) exclusionsPanel() *fyne.Container {
 	if err != nil {
 		fmt.Printf("load exclusions error: %v\n", err)
 	}
+	u.setDomainsCount(len(exclusions))
 	filtered := exclusions
 	currentQuery := ""
 
@@ -375,6 +435,7 @@ func (u *UI) exclusionsPanel() *fyne.Container {
 				fmt.Printf("reload exclusions error: %v\n", loadErr)
 				return
 			}
+			u.setDomainsCount(len(newExclusions))
 			fyne.Do(func() {
 				mode = newMode
 				exclusions = newExclusions
@@ -774,6 +835,7 @@ func (u *UI) exclusionsPanel() *fyne.Container {
 				fmt.Printf("reload exclusions error: %v\n", loadErr)
 				return
 			}
+			u.setDomainsCount(len(newExclusions))
 			fyne.Do(func() {
 				mode = newMode
 				exclusions = newExclusions
