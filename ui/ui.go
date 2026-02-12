@@ -487,7 +487,7 @@ func (u *UI) exclusionsPanel() *fyne.Container {
 		refreshFiltered()
 	}
 
-	appendBtn := widget.NewButton("Append", func() {
+	appendCurrent := func() {
 		domain := strings.TrimSpace(filterEntry.Text)
 		if domain == "" {
 			return
@@ -503,6 +503,14 @@ func (u *UI) exclusionsPanel() *fyne.Container {
 			}
 			reloadExclusions()
 		}(domain)
+	}
+
+	filterEntry.OnSubmitted = func(_ string) {
+		appendCurrent()
+	}
+
+	appendBtn := widget.NewButton("Append", func() {
+		appendCurrent()
 	})
 
 	modeRadio = widget.NewRadioGroup([]string{optionGeneral, optionSelective}, nil)
