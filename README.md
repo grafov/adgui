@@ -36,9 +36,7 @@ The Domains tab in the dashboard allows you to manage site exclusions for AdGuar
 
 The Import and Export buttons allow you to save and restore domain exclusion lists.
 
-#### Export
-
-Click "Export" to save the current domain list to a file:
+#### ExportClick "Export" to save the current domain list to a file:
 
 1. A dialog appears showing existing export files (if any)
 2. Click on an existing file to select it, or type a new filename

@@ -166,10 +166,13 @@ func (u *UI) updateMenuItems() {
 			if domainsMenuItem != nil {
 				domainsMenuItem.Label = domainsMenuLabel(domainsCount)
 			}
+			// false - means available
 			items[1].Disabled = false
-			items[3].Disabled = connected  // Connect Auto
-			items[4].Disabled = false      // Connect To... available always
-			items[6].Disabled = !connected // Disconnect
+			items[2].Disabled = connected  // Connect the best
+			items[3].Disabled = false      // Connect To...
+			items[4].Disabled = false      // Domains
+			items[5].Disabled = !connected // Disconnect
+			items[6].Disabled = false      // Quit
 			u.menu.Items = items
 			u.desk.SetSystemTrayMenu(u.menu)
 		})

@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"adgui/config"
 	"adgui/locations"
 )
 
@@ -96,14 +97,24 @@ func (v *VPNManager) SetStatusChangeCallback(callback func()) {
 }
 
 func (v *VPNManager) executeCommand(args ...string) (string, error) {
-	cmdPath := os.Getenv("ADGUARD_CMD")
-	if cmdPath == "" {
-		cmdPath = "adguardvpn-cli"
-	}
-
+	cmdPath := resolveCommandPath()
 	cmd := exec.Command(cmdPath, args...)
 	output, err := cmd.CombinedOutput()
 	return string(output), err
+}
+
+func resolveCommandPath() string {
+	cmdPath, err := config.AdguardCmd()
+	if err != nil {
+		fmt.Printf("Config read error: %v\n", err)
+	}
+	if cmdPath == "" {
+		cmdPath = os.Getenv("ADGUARD_CMD")
+	}
+	if cmdPath == "" {
+		cmdPath = "adguardvpn-cli"
+	}
+	return cmdPath
 }
 
 func (v *VPNManager) ConnectAuto() {
