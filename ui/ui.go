@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"image/color"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -343,10 +344,11 @@ func (u *UI) Dashboard() string {
 	)
 
 	license := u.licensePanel()
+	stopPasteWatch := make(chan struct{})
 	tabs := container.NewAppTabs(
 		container.NewTabItem("Connections", connectionsContent),
 		container.NewTabItem("License", license),
-		container.NewTabItem("Domains", u.exclusionsPanel()),
+		container.NewTabItem("Domains", u.exclusionsPanel(stopPasteWatch)),
 	)
 	u.dashboardTabs = tabs
 	tabs.SetTabLocation(container.TabLocationLeading)
@@ -362,6 +364,7 @@ func (u *UI) Dashboard() string {
 
 	// Clean up references when window is closed
 	window.SetOnClosed(func() {
+		close(stopPasteWatch)
 		u.dashboardmx.Lock()
 		defer u.dashboardmx.Unlock()
 		u.dashboardWindow = nil
@@ -382,7 +385,7 @@ func (u *UI) licensePanel() *fyne.Container {
 	)
 }
 
-func (u *UI) exclusionsPanel() *fyne.Container {
+func (u *UI) exclusionsPanel(stopCh <-chan struct{}) *fyne.Container {
 	mode, exclusions, err := u.vpnmgr.GetSiteExclusions()
 	if err != nil {
 		fmt.Printf("load exclusions error: %v\n", err)
@@ -416,6 +419,7 @@ func (u *UI) exclusionsPanel() *fyne.Container {
 
 	filterEntry := widget.NewEntry()
 	filterEntry.SetPlaceHolder("Filter or enter domain...")
+	clipboard := u.Fyne.Clipboard()
 
 	var exclusionsList *widget.List
 	var modeRadio *widget.RadioGroup
@@ -512,6 +516,107 @@ func (u *UI) exclusionsPanel() *fyne.Container {
 	appendBtn := widget.NewButton("Append", func() {
 		appendCurrent()
 	})
+	var pasteBtn *widget.Button
+
+	getClipboardContent := func() string {
+		if clipboard == nil {
+			return ""
+		}
+		return strings.TrimSpace(clipboard.Content())
+	}
+
+	updatePasteButtonState := func() {
+		if pasteBtn == nil {
+			return
+		}
+		content := getClipboardContent()
+		fyne.Do(func() {
+			if content == "" {
+				pasteBtn.Disable()
+			} else {
+				pasteBtn.Enable()
+			}
+		})
+	}
+
+	extractDomainFromClipboard := func() string {
+		content := getClipboardContent()
+		if content == "" {
+			return ""
+		}
+		fields := strings.Fields(content)
+		if len(fields) == 0 {
+			return ""
+		}
+		token := fields[0]
+		if !strings.Contains(token, "://") {
+			token = "http://" + token
+		}
+		parsed, parseErr := url.Parse(token)
+		if parseErr != nil {
+			return ""
+		}
+		host := strings.ToLower(strings.TrimSuffix(parsed.Hostname(), "."))
+		host = strings.TrimPrefix(host, "www.")
+		if !strings.Contains(host, ".") {
+			return ""
+		}
+		return host
+	}
+
+	pasteFromClipboard := func() {
+		domain := extractDomainFromClipboard()
+		updatePasteButtonState()
+		if domain == "" {
+			return
+		}
+		fyne.Do(func() { filterEntry.SetText(domain) })
+		go func(target string) {
+			entries := []string{"www." + target, "*." + target}
+			for _, entry := range entries {
+				if containsIgnoreCase(exclusions, entry) {
+					continue
+				}
+				if err := u.vpnmgr.AddSiteExclusion(entry); err != nil {
+					fmt.Printf("add exclusion error: %v\n", err)
+					return
+				}
+			}
+			reloadExclusions()
+		}(domain)
+	}
+
+	pasteBtn = widget.NewButton("Paste", func() {
+		pasteFromClipboard()
+	})
+
+	updatePasteButtonState()
+	if stopCh != nil {
+		go func() {
+			ticker := time.NewTicker(750 * time.Millisecond)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ticker.C:
+					updatePasteButtonState()
+				case <-stopCh:
+					return
+				}
+			}
+		}()
+	}
+
+	if u.dashboardWindow != nil {
+		u.dashboardWindow.Canvas().AddShortcut(
+			&desktop.CustomShortcut{KeyName: fyne.KeyV, Modifier: fyne.KeyModifierAlt | fyne.KeyModifierControl},
+			func(shortcut fyne.Shortcut) {
+				if u.dashboardTabs == nil || u.dashboardTabs.SelectedIndex() != domainsTabIndex {
+					return
+				}
+				pasteFromClipboard()
+			},
+		)
+	}
 
 	modeRadio = widget.NewRadioGroup([]string{optionGeneral, optionSelective}, nil)
 	if mode == commands.SiteExclusionModeGeneral {
@@ -863,7 +968,7 @@ func (u *UI) exclusionsPanel() *fyne.Container {
 		}()
 	}
 
-	header := container.NewBorder(nil, nil, nil, appendBtn, filterEntry)
+	header := container.NewBorder(nil, nil, nil, container.NewHBox(appendBtn, pasteBtn), filterEntry)
 	bottomButtons := container.NewHBox(importBtn, exportBtn, clearBtn)
 	bottomControls := container.NewBorder(nil, nil, modeControls, bottomButtons)
 

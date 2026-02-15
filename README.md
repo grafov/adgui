@@ -21,9 +21,7 @@ Or use `PREFIX` for installing to another directory, for example under home:
 
 The Domains tab in the dashboard allows you to manage site exclusions for AdGuard VPN. You can configure which domains bypass or use the VPN connection.
 
-#### Exclusion Modes
-
-- **General mode**: Domains in the list are excluded from VPN (traffic goes directly)
+#### Exclusion Modes- **General mode**: Domains in the list are excluded from VPN (traffic goes directly)
 - **Selective mode**: Only domains in the list use the VPN connection
 
 #### Managing Domains
