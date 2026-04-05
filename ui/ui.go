@@ -300,10 +300,11 @@ func (u *UI) Dashboard() string {
 	u.dashboardmx.Lock()
 	defer u.dashboardmx.Unlock()
 
-	// If dashboard window already exists, we can't simply RequestFocus or Show it
-	// in Wayland without user interaction token. So just ignore or log.
+	// Reuse a hidden dashboard instead of Close(): Close() sets the GLFW driver's
+	// closing flag while GLFW can still deliver cursor/mouse events, which can panic
+	// inside Fyne's processMouseMoved (nil view). Hide() does not set closing.
 	if u.dashboardWindow != nil {
-		// u.dashboardWindow.Show() // This might crash in Wayland if called without interaction
+		u.dashboardWindow.Show()
 		return ""
 	}
 
@@ -354,23 +355,15 @@ func (u *UI) Dashboard() string {
 	tabs.SetTabLocation(container.TabLocationLeading)
 	window.SetContent(tabs)
 
-	// Close on Esc
+	// Hide on Esc (see Close vs Hide note above)
 	window.Canvas().SetOnTypedKey(func(k *fyne.KeyEvent) {
 		if k.Name == fyne.KeyEscape {
-			// Close asynchronously to avoid potential event loop conflicts
-			fyne.Do(window.Close)
+			window.Hide()
 		}
 	})
 
-	// Clean up references when window is closed
-	window.SetOnClosed(func() {
-		close(stopPasteWatch)
-		u.dashboardmx.Lock()
-		defer u.dashboardmx.Unlock()
-		u.dashboardWindow = nil
-		u.dashboardStatusLabel = nil
-		u.dashboardConnectBtn = nil
-		u.dashboardTabs = nil
+	window.SetCloseIntercept(func() {
+		window.Hide()
 	})
 
 	window.Show()
@@ -682,9 +675,7 @@ func (u *UI) exclusionsPanel(stopCh <-chan struct{}) *fyne.Container {
 		}
 
 		var d dialog.Dialog
-		var performWrite func(string, bool, string)
-
-		performWrite = func(fPath string, appendMode bool, name string) {
+		var performWrite = func(fPath string, appendMode bool, name string) {
 			var f *os.File
 			var err error
 			if appendMode {
@@ -701,7 +692,7 @@ func (u *UI) exclusionsPanel(stopCh <-chan struct{}) *fyne.Container {
 			content := strings.Join(filtered, "\n")
 			if content != "" {
 				if appendMode {
-					// Add newline before content if file exists and not empty
+
 					stat, _ := f.Stat()
 					if stat.Size() > 0 {
 						content = "\n" + content
@@ -981,6 +972,7 @@ func (u *UI) LocationSelector() {
 	defer u.locationmx.Unlock()
 
 	if u.locationWindow != nil {
+		u.locationWindow.Show()
 		return
 	}
 
@@ -1012,19 +1004,16 @@ func (u *UI) LocationSelector() {
 		window.Resize(fyne.NewSize(640, 720))
 		u.locationWindow = window
 
-		window.SetOnClosed(func() {
-			u.locationmx.Lock()
-			defer u.locationmx.Unlock()
-			u.locationWindow = nil
+		window.SetCloseIntercept(func() {
+			window.Hide()
 		})
 
 		filterEntry := widget.NewEntry()
 		filterEntry.SetPlaceHolder("Filter by city or country...")
 
-		var table *widget.Table
-		table = widget.NewTable(
+		var table = widget.NewTable(
 			func() (int, int) {
-				return len(filteredLocations) + 1, 4 // +1 for header
+				return len(filteredLocations) + 1, 4
 			},
 			func() fyne.CanvasObject {
 				return widget.NewLabel("...")
@@ -1080,7 +1069,7 @@ func (u *UI) LocationSelector() {
 			selectedLocation := filteredLocations[id.Row-1]
 			fmt.Printf("Selected: %+v\n", selectedLocation)
 			go u.vpnmgr.ConnectToLocation(selectedLocation.City)
-			window.Close()
+			window.Hide()
 		}
 
 		filterEntry.OnChanged = func(query string) {
@@ -1094,7 +1083,7 @@ func (u *UI) LocationSelector() {
 
 		window.Canvas().SetOnTypedKey(func(k *fyne.KeyEvent) {
 			if k.Name == fyne.KeyEscape {
-				fyne.Do(window.Close)
+				window.Hide()
 			}
 		})
 
