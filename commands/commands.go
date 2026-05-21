@@ -1,11 +1,13 @@
 package commands
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"adgui/config"
@@ -44,6 +46,17 @@ func parseSiteExclusionMode(line string) SiteExclusionMode {
 	}
 }
 
+// RunningCommand represents information about a currently executing CLI command.
+// It includes the unique identifier, process ID, command executable path, arguments,
+// and the time when the execution started.
+type RunningCommand struct {
+	ID        uint64
+	PID       int
+	Path      string
+	Args      []string
+	StartedAt time.Time
+}
+
 type VPNManager struct {
 	statusTicker   *time.Ticker
 	onStatusChange func()
@@ -55,10 +68,21 @@ type VPNManager struct {
 	location           string
 	isConnected        bool
 	siteExclusionsMode SiteExclusionMode
+
+	// command queue tracking
+	queueMx       sync.Mutex
+	runningCmds   map[uint64]*exec.Cmd
+	cmdInfos      map[uint64]RunningCommand
+	nextCmdID     uint64
+	onQueueChange func()
 }
 
 func New() *VPNManager {
-	mgr := VPNManager{checkReqs: make(chan struct{}, 1)}
+	mgr := VPNManager{
+		checkReqs:   make(chan struct{}, 1),
+		runningCmds: make(map[uint64]*exec.Cmd),
+		cmdInfos:    make(map[uint64]RunningCommand),
+	}
 	go mgr.statusCheckLoop()
 	return &mgr
 }
@@ -99,8 +123,145 @@ func (v *VPNManager) SetStatusChangeCallback(callback func()) {
 func (v *VPNManager) executeCommand(args ...string) (string, error) {
 	cmdPath := resolveCommandPath()
 	cmd := exec.Command(cmdPath, args...)
-	output, err := cmd.CombinedOutput()
-	return string(output), err
+
+	var buf bytes.Buffer
+	cmd.Stdout = &buf
+	cmd.Stderr = &buf
+
+	if err := cmd.Start(); err != nil {
+		return "", err
+	}
+
+	_, done := v.registerCommand(cmdPath, args, cmd)
+	defer done()
+
+	err := cmd.Wait()
+	return buf.String(), err
+}
+
+func (v *VPNManager) registerCommand(path string, args []string, cmd *exec.Cmd) (uint64, func()) {
+	v.queueMx.Lock()
+	v.nextCmdID++
+	id := v.nextCmdID
+
+	pid := 0
+	if cmd.Process != nil {
+		pid = cmd.Process.Pid
+	}
+
+	v.runningCmds[id] = cmd
+	v.cmdInfos[id] = RunningCommand{
+		ID:        id,
+		PID:       pid,
+		Path:      path,
+		Args:      args,
+		StartedAt: time.Now(),
+	}
+	callback := v.onQueueChange
+	v.queueMx.Unlock()
+
+	if callback != nil {
+		callback()
+	}
+
+	return id, func() {
+		v.queueMx.Lock()
+		delete(v.runningCmds, id)
+		delete(v.cmdInfos, id)
+		callback := v.onQueueChange
+		v.queueMx.Unlock()
+
+		if callback != nil {
+			callback()
+		}
+	}
+}
+
+// RunningCommands returns a list of all currently running CLI commands.
+// The returned slice is a snapshot of the current state and is safe for concurrent read.
+func (v *VPNManager) RunningCommands() []RunningCommand {
+	v.queueMx.Lock()
+	defer v.queueMx.Unlock()
+
+	cmds := make([]RunningCommand, 0, len(v.cmdInfos))
+	for _, info := range v.cmdInfos {
+		cmds = append(cmds, info)
+	}
+	return cmds
+}
+
+// SetCommandQueueChangeCallback sets a function to be called when the command queue changes.
+func (v *VPNManager) SetCommandQueueChangeCallback(callback func()) {
+	v.queueMx.Lock()
+	defer v.queueMx.Unlock()
+	v.onQueueChange = callback
+}
+
+// KillCommand attempts to terminate a specific running command by its ID.
+// It sends SIGTERM first, and falls back to SIGKILL if the process does not terminate.
+func (v *VPNManager) KillCommand(id uint64) error {
+	v.queueMx.Lock()
+	cmd, ok := v.runningCmds[id]
+	info, hasInfo := v.cmdInfos[id]
+	v.queueMx.Unlock()
+
+	if !ok || cmd == nil || cmd.Process == nil {
+		return fmt.Errorf("command not found or not running")
+	}
+
+	pid := cmd.Process.Pid
+	if hasInfo && info.PID != 0 {
+		pid = info.PID
+	}
+
+	killCmdStr, err := config.AdguardKillCmd()
+	if err != nil {
+		fmt.Printf("Config read error for kill cmd: %v\n", err)
+	}
+	if killCmdStr == "" {
+		killCmdStr = os.Getenv("ADGUARD_KILL_CMD")
+	}
+
+	if killCmdStr != "" {
+		fields := strings.Fields(killCmdStr)
+		if len(fields) > 0 {
+			fields = append(fields, fmt.Sprintf("%d", pid))
+			killCmd := exec.Command(fields[0], fields[1:]...)
+			output, err := killCmd.CombinedOutput()
+			if err != nil {
+				return fmt.Errorf("failed to run kill command %v: %w (output: %s)", fields, err, string(output))
+			}
+			return nil
+		}
+	}
+
+	err = cmd.Process.Signal(syscall.SIGTERM)
+	if err != nil {
+		return cmd.Process.Kill()
+	}
+
+	go func(p *os.Process) {
+		time.Sleep(500 * time.Millisecond)
+		if err := p.Signal(syscall.Signal(0)); err == nil {
+			_ = p.Kill()
+		}
+	}(cmd.Process)
+
+	return nil
+}
+
+// KillAllCommands terminates all currently running CLI commands.
+func (v *VPNManager) KillAllCommands() {
+	v.queueMx.Lock()
+	ids := make([]uint64, 0, len(v.runningCmds))
+	for id := range v.runningCmds {
+		ids = append(ids, id)
+	}
+	v.queueMx.Unlock()
+
+	for _, id := range ids {
+		_ = v.KillCommand(id)
+	}
 }
 
 func resolveCommandPath() string {

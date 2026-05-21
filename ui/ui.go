@@ -52,6 +52,10 @@ type (
 		dashboardConnectBtn  *widget.Button
 		dashboardTabs        *container.AppTabs
 
+		// Command queue list reference for live updates
+		cmdQueuemx          sync.RWMutex
+		cmdQueueRefreshFunc func()
+
 		// Location selector window
 		locationmx     sync.RWMutex
 		locationWindow fyne.Window
@@ -113,13 +117,13 @@ func (u *UI) createTrayMenu() {
 		u.Dashboard()
 	})
 	connectAuto := fyne.NewMenuItem("Connect the best", func() {
-		u.vpnmgr.ConnectAuto()
+		go u.vpnmgr.ConnectAuto()
 	})
 	connectTo := fyne.NewMenuItem("Connect To...", func() {
 		u.LocationSelector()
 	})
 	disconnect := fyne.NewMenuItem("Disconnect", func() {
-		u.vpnmgr.Disconnect()
+		go u.vpnmgr.Disconnect()
 	})
 	domains := fyne.NewMenuItem(domainsMenuLabel(u.getDomainsCount()), func() {
 		u.showDashboardTab(domainsTabIndex)
@@ -293,6 +297,13 @@ func (u *UI) updateDashboard() {
 		if connectBtn != nil {
 			u.updateDashboardButtons()
 		}
+
+		u.cmdQueuemx.RLock()
+		refresh := u.cmdQueueRefreshFunc
+		u.cmdQueuemx.RUnlock()
+		if refresh != nil {
+			refresh()
+		}
 	})
 }
 
@@ -321,11 +332,13 @@ func (u *UI) Dashboard() string {
 
 	// Control buttons section
 	connectBtn := widget.NewButton("", func() {
-		if u.vpnmgr.IsConnected() {
-			u.vpnmgr.Disconnect()
-		} else {
-			u.vpnmgr.ConnectAuto()
-		}
+		go func() {
+			if u.vpnmgr.IsConnected() {
+				u.vpnmgr.Disconnect()
+			} else {
+				u.vpnmgr.ConnectAuto()
+			}
+		}()
 	})
 	u.dashboardConnectBtn = connectBtn
 	u.updateDashboardButtons()
@@ -350,6 +363,7 @@ func (u *UI) Dashboard() string {
 		container.NewTabItem("Connections", connectionsContent),
 		container.NewTabItem("License", license),
 		container.NewTabItem("Domains", u.exclusionsPanel(stopPasteWatch)),
+		container.NewTabItem("Cmd queue", u.cmdQueuePanel()),
 	)
 	u.dashboardTabs = tabs
 	tabs.SetTabLocation(container.TabLocationLeading)
@@ -371,20 +385,27 @@ func (u *UI) Dashboard() string {
 }
 
 func (u *UI) licensePanel() *fyne.Container {
+	licenseLabel := parseAnsi("Loading license...")
+	go func() {
+		text := u.vpnmgr.License()
+		fyne.Do(func() {
+			parsed := parseAnsi(text)
+			licenseLabel.Segments = parsed.Segments
+			licenseLabel.Refresh()
+		})
+	}()
+
 	return container.New(
 		layout.NewVBoxLayout(),
 		widget.NewLabel("AdGuard license"),
-		parseAnsi(u.vpnmgr.License()),
+		licenseLabel,
 	)
 }
 
 func (u *UI) exclusionsPanel(stopCh <-chan struct{}) *fyne.Container {
-	mode, exclusions, err := u.vpnmgr.GetSiteExclusions()
-	if err != nil {
-		fmt.Printf("load exclusions error: %v\n", err)
-	}
-	u.setDomainsCount(len(exclusions))
-	filtered := exclusions
+	var mode = commands.SiteExclusionModeGeneral
+	var exclusions []string
+	var filtered []string
 	currentQuery := ""
 
 	filterExclusions := func(items []string, query string) []string {
@@ -964,6 +985,7 @@ func (u *UI) exclusionsPanel(stopCh <-chan struct{}) *fyne.Container {
 	bottomControls := container.NewBorder(nil, nil, modeControls, bottomButtons)
 
 	content := container.NewBorder(header, bottomControls, nil, nil, exclusionsList)
+	reloadExclusions()
 	return content
 }
 
@@ -976,8 +998,8 @@ func (u *UI) LocationSelector() {
 		return
 	}
 
-	allLocations := u.vpnmgr.ListLocations()
-	filteredLocations := allLocations
+	var allLocations []locations.Location
+	var filteredLocations []locations.Location
 
 	// Состояние сортировки
 	sortColumn := locations.SortByPing
@@ -1088,5 +1110,14 @@ func (u *UI) LocationSelector() {
 		})
 
 		window.Show()
+
+		go func() {
+			locs := u.vpnmgr.ListLocations()
+			fyne.Do(func() {
+				allLocations = locs
+				filteredLocations = locations.SortLocations(locs, sortColumn, sortAscending)
+				table.Refresh()
+			})
+		}()
 	})
 }
