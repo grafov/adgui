@@ -40,31 +40,28 @@ When you switch exclusion modes, the current active list is saved to its corresp
 
 ### Import/Export
 
-The Import and Export buttons allow you to save and restore domain exclusion lists.
+The Import and Export buttons allow you to save and restore domain exclusion lists for the **current exclusion mode** (General or Selective).
 
-#### ExportClick "Export" to save the current domain list to a file:
+#### Export
 
-1. A dialog appears showing existing export files (if any)
-2. Click on an existing file to select it, or type a new filename
-3. Choose an action:
-   - **Append**: Add the current domains to the selected file (creates new file if it doesn't exist)
-   - **Overwrite**: Replace the file contents with the current domains (asks for confirmation if file exists)
-   - **Cancel**: Close the dialog without saving
+Click **Export** to save domains from the current mode to a file:
 
-**Note**: Only the currently filtered/visible domains are exported. If you have a filter active, only matching domains will be saved. Clear the filter to export all domains.
+1. A system save dialog opens with the default filename `<mode>.adgui` (`general.adgui` or `selective.adgui`)
+2. Choose the destination path and filename (default extension: `.adgui`)
+3. The file is saved with the exported domains
 
-Export files are stored in: `~/.local/share/adgui/site-exclusions/`
+**Note**: Only the currently filtered/visible domains are exported. If you have a filter active, only matching domains will be saved. Clear the filter to export all domains in the current mode.
 
 #### Import
 
-Click "Import" to load domains from a previously exported file:
+Click **Import** to load domains from a file into the **current exclusion mode**:
 
-1. A dialog appears listing all available export files
-2. Click on a file to import its contents
-3. Domains from the file are added to the current exclusion list
+1. A system open dialog opens (any file extension)
+2. Select a file with one domain per line
+3. New domains are added to the current mode list in adgui and immediately applied to AdGuard VPN
 4. Duplicate domains (already in the list) are automatically skipped
 
-The import operation shows a progress indicator and refreshes the list upon completion.
+The import operation shows a progress indicator and refreshes the list upon completion. Imported domains are persisted to the current mode file (`general.txt` or `selective.txt`).
 
 ### Migration
 
@@ -78,7 +75,7 @@ By default, the script scans the `~/.local/share/adgui/site-exclusions/` directo
 
 #### File Format
 
-Export files are plain text with one domain per line. You can also create or edit these files manually:
+Export/import files are plain text with one domain per line. The default export extension is `.adgui`. You can also create or edit these files manually:
 
 ```
 example.com

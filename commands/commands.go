@@ -488,8 +488,8 @@ func (v *VPNManager) checkStatus() {
 					location = location[idx+len(prefix):]
 				}
 				// Удаляем ANSI коды жирного шрифта
-				location = strings.ReplaceAll(location, `[1m`, ``)
-				location = strings.ReplaceAll(location, `[0m`, ``)
+				location = strings.ReplaceAll(location, "\x1b[1m", "")
+				location = strings.ReplaceAll(location, "\x1b[0m", "")
 				// Удаляем суффикс после названия локации
 				if idx := strings.Index(location, " in "); idx >= 0 {
 					location = location[:idx]
