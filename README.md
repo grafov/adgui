@@ -21,8 +21,16 @@ Or use `PREFIX` for installing to another directory, for example under home:
 
 The Domains tab in the dashboard allows you to manage site exclusions for AdGuard VPN. You can configure which domains bypass or use the VPN connection.
 
-#### Exclusion Modes- **General mode**: Domains in the list are excluded from VPN (traffic goes directly)
+#### Exclusion Modes
+- **General mode**: Domains in the list are excluded from VPN (traffic goes directly)
 - **Selective mode**: Only domains in the list use the VPN connection
+
+#### Automatic Persistence
+The exclusion lists are separated by mode (General and Selective) and automatically persist to the following local files on any change (Add, Paste, Import, Remove, Clear):
+- General mode: `~/.local/share/adgui/site-exclusions/general.txt`
+- Selective mode: `~/.local/share/adgui/site-exclusions/selective.txt`
+
+When you switch exclusion modes, the current active list is saved to its corresponding file, and the list for the new mode is automatically loaded and applied to the CLI.
 
 #### Managing Domains
 
@@ -57,6 +65,16 @@ Click "Import" to load domains from a previously exported file:
 4. Duplicate domains (already in the list) are automatically skipped
 
 The import operation shows a progress indicator and refreshes the list upon completion.
+
+### Migration
+
+If you have old unified plain-text exclusion files, you can migrate them to the new mode-specific files using the provided Python script:
+
+```bash
+python3 scripts/migrate-site-exclusions.py --target-mode [general|selective]
+```
+
+By default, the script scans the `~/.local/share/adgui/site-exclusions/` directory and merges all files (excluding `general.txt` and `selective.txt`) into the target mode file with automatic deduplication. You can also specify input files explicitly using the `--input <path>` flag.
 
 #### File Format
 

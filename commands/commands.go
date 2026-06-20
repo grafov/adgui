@@ -398,13 +398,28 @@ func (v *VPNManager) RemoveSiteExclusion(domain string) error {
 	return nil
 }
 
-// SetSiteExclusionsMode switches mode and re-applies provided domains.
+// SetSiteExclusionsMode switches the site exclusions mode in AdGuard VPN.
+// Detailed explanation: It saves the domains of the previous mode to its corresponding file,
+// executes the CLI mode switch command, loads the domains for the new target mode from its file,
+// and applies them to the CLI.
 func (v *VPNManager) SetSiteExclusionsMode(mode SiteExclusionMode, domains []string) error {
+	prevMode := v.SiteExclusionsMode()
+
+	if err := SaveExclusionsForMode(prevMode, domains); err != nil {
+		return fmt.Errorf("failed to save exclusions for previous mode %s: %w", prevMode, err)
+	}
+
 	output, err := v.executeCommand("site-exclusions", "mode", mode.String())
 	if err != nil {
 		return fmt.Errorf("site-exclusions mode %s failed: %w, output: %s", mode, err, output)
 	}
-	for _, domain := range domains {
+
+	newDomains, err := LoadExclusionsForMode(mode)
+	if err != nil {
+		return fmt.Errorf("failed to load exclusions for target mode %s: %w", mode, err)
+	}
+
+	for _, domain := range newDomains {
 		if strings.TrimSpace(domain) == "" {
 			continue
 		}
@@ -412,6 +427,7 @@ func (v *VPNManager) SetSiteExclusionsMode(mode SiteExclusionMode, domains []str
 			return fmt.Errorf("re-applying domain %s failed: %w", domain, err)
 		}
 	}
+
 	v.statemx.Lock()
 	v.siteExclusionsMode = mode
 	v.statemx.Unlock()

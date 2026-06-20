@@ -60,6 +60,11 @@ type (
 		locationmx     sync.RWMutex
 		locationWindow fyne.Window
 
+		// Domains tab clipboard polling lifecycle
+		pasteWatchStop chan struct{}
+		pasteWatchDone chan struct{}
+		pasteWatchOnce sync.Once
+
 		// and...
 		withLogicIncluded
 	}
@@ -111,6 +116,23 @@ func (u *UI) Run() {
 	u.Fyne.Run()
 }
 
+func (u *UI) startPasteWatcher() {
+	if u.pasteWatchStop != nil {
+		return
+	}
+	u.pasteWatchStop = make(chan struct{})
+	u.pasteWatchDone = make(chan struct{})
+}
+
+func (u *UI) stopPasteWatcher() {
+	u.pasteWatchOnce.Do(func() {
+		if u.pasteWatchStop != nil {
+			close(u.pasteWatchStop)
+			<-u.pasteWatchDone
+		}
+	})
+}
+
 func (u *UI) createTrayMenu() {
 	status := fyne.NewMenuItem("Adguard VPN", func() {})
 	dashboard := fyne.NewMenuItem("Show dashboard", func() {
@@ -125,6 +147,11 @@ func (u *UI) createTrayMenu() {
 	disconnect := fyne.NewMenuItem("Disconnect", func() {
 		go u.vpnmgr.Disconnect()
 	})
+	quitItem := fyne.NewMenuItem("Quit", func() {
+		u.stopPasteWatcher()
+		u.Fyne.Quit()
+	})
+	quitItem.IsQuit = true
 	domains := fyne.NewMenuItem(domainsMenuLabel(u.getDomainsCount()), func() {
 		u.showDashboardTab(domainsTabIndex)
 	})
@@ -137,6 +164,8 @@ func (u *UI) createTrayMenu() {
 		domains,
 		fyne.NewMenuItemSeparator(),
 		disconnect,
+		fyne.NewMenuItemSeparator(),
+		quitItem,
 	)
 	u.menu.Items[0].Disabled = true // status field
 
@@ -176,8 +205,8 @@ func (u *UI) updateMenuItems() {
 			items[2].Disabled = connected  // Connect the best
 			items[3].Disabled = false      // Connect To...
 			items[4].Disabled = false      // Domains
-			items[5].Disabled = !connected // Disconnect
-			items[6].Disabled = false      // Quit
+			items[6].Disabled = !connected // Disconnect
+			items[8].Disabled = false      // Quit
 			u.menu.Items = items
 			u.desk.SetSystemTrayMenu(u.menu)
 		})
@@ -358,11 +387,11 @@ func (u *UI) Dashboard() string {
 	)
 
 	license := u.licensePanel()
-	stopPasteWatch := make(chan struct{})
+	u.startPasteWatcher()
 	tabs := container.NewAppTabs(
 		container.NewTabItem("Connections", connectionsContent),
 		container.NewTabItem("License", license),
-		container.NewTabItem("Domains", u.exclusionsPanel(stopPasteWatch)),
+		container.NewTabItem("Domains", u.exclusionsPanel(u.pasteWatchStop)),
 		container.NewTabItem("Cmd queue", u.cmdQueuePanel()),
 	)
 	u.dashboardTabs = tabs
@@ -449,7 +478,10 @@ func (u *UI) exclusionsPanel(stopCh <-chan struct{}) *fyne.Container {
 		}
 	}
 
-	reloadExclusions := func() {
+	var reloadExclusions func()
+	var reloadExclusionsAndSave func()
+
+	reloadExclusions = func() {
 		go func() {
 			newMode, newExclusions, loadErr := u.vpnmgr.GetSiteExclusions()
 			if loadErr != nil {
@@ -494,7 +526,7 @@ func (u *UI) exclusionsPanel(stopCh <-chan struct{}) *fyne.Container {
 						fmt.Printf("remove exclusion error: %v\n", err)
 						return
 					}
-					reloadExclusions()
+					reloadExclusionsAndSave()
 				}(domain)
 			}
 		},
@@ -519,7 +551,7 @@ func (u *UI) exclusionsPanel(stopCh <-chan struct{}) *fyne.Container {
 				fmt.Printf("add exclusion error: %v\n", err)
 				return
 			}
-			reloadExclusions()
+			reloadExclusionsAndSave()
 		}(domain)
 	}
 
@@ -532,29 +564,8 @@ func (u *UI) exclusionsPanel(stopCh <-chan struct{}) *fyne.Container {
 	})
 	var pasteBtn *widget.Button
 
-	getClipboardContent := func() string {
-		if clipboard == nil {
-			return ""
-		}
-		return strings.TrimSpace(clipboard.Content())
-	}
-
-	updatePasteButtonState := func() {
-		if pasteBtn == nil {
-			return
-		}
-		content := getClipboardContent()
-		fyne.Do(func() {
-			if content == "" {
-				pasteBtn.Disable()
-			} else {
-				pasteBtn.Enable()
-			}
-		})
-	}
-
-	extractDomainFromClipboard := func() string {
-		content := getClipboardContent()
+	parseDomainFromClipboard := func(content string) string {
+		content = strings.TrimSpace(content)
 		if content == "" {
 			return ""
 		}
@@ -578,26 +589,53 @@ func (u *UI) exclusionsPanel(stopCh <-chan struct{}) *fyne.Container {
 		return host
 	}
 
-	pasteFromClipboard := func() {
-		domain := extractDomainFromClipboard()
-		updatePasteButtonState()
-		if domain == "" {
+	updatePasteButtonState := func() {
+		if pasteBtn == nil {
 			return
 		}
-		fyne.Do(func() { filterEntry.SetText(domain) })
-		go func(target string) {
-			entries := []string{"www." + target, "*." + target}
-			for _, entry := range entries {
-				if containsIgnoreCase(exclusions, entry) {
-					continue
-				}
-				if err := u.vpnmgr.AddSiteExclusion(entry); err != nil {
-					fmt.Printf("add exclusion error: %v\n", err)
-					return
-				}
+		fyne.Do(func() {
+			content := ""
+			if clipboard != nil {
+				content = strings.TrimSpace(clipboard.Content())
 			}
-			reloadExclusions()
-		}(domain)
+			if content == "" {
+				pasteBtn.Disable()
+			} else {
+				pasteBtn.Enable()
+			}
+		})
+	}
+
+	pasteFromClipboard := func() {
+		fyne.Do(func() {
+			content := ""
+			if clipboard != nil {
+				content = strings.TrimSpace(clipboard.Content())
+			}
+			domain := parseDomainFromClipboard(content)
+			if content == "" {
+				pasteBtn.Disable()
+			} else {
+				pasteBtn.Enable()
+			}
+			if domain == "" {
+				return
+			}
+			filterEntry.SetText(domain)
+			go func(target string) {
+				entries := []string{"www." + target, "*." + target}
+				for _, entry := range entries {
+					if containsIgnoreCase(exclusions, entry) {
+						continue
+					}
+					if err := u.vpnmgr.AddSiteExclusion(entry); err != nil {
+						fmt.Printf("add exclusion error: %v\n", err)
+						return
+					}
+				}
+				reloadExclusionsAndSave()
+			}(domain)
+		})
 	}
 
 	pasteBtn = widget.NewButton("Paste", func() {
@@ -609,6 +647,7 @@ func (u *UI) exclusionsPanel(stopCh <-chan struct{}) *fyne.Container {
 		go func() {
 			ticker := time.NewTicker(750 * time.Millisecond)
 			defer ticker.Stop()
+			defer close(u.pasteWatchDone)
 			for {
 				select {
 				case <-ticker.C:
@@ -708,7 +747,9 @@ func (u *UI) exclusionsPanel(stopCh <-chan struct{}) *fyne.Container {
 				dialog.ShowError(err, u.dashboardWindow)
 				return
 			}
-			defer f.Close()
+			defer func() {
+				_ = f.Close()
+			}()
 
 			content := strings.Join(filtered, "\n")
 			if content != "" {
@@ -865,7 +906,9 @@ func (u *UI) exclusionsPanel(stopCh <-chan struct{}) *fyne.Container {
 				dialog.ShowError(err, u.dashboardWindow)
 				return
 			}
-			defer f.Close()
+			defer func() {
+				_ = f.Close()
+			}()
 
 			scanner := bufio.NewScanner(f)
 			var toAdd []string
@@ -882,9 +925,9 @@ func (u *UI) exclusionsPanel(stopCh <-chan struct{}) *fyne.Container {
 				go func() {
 					defer progress.Hide()
 					for _, domain := range toAdd {
-						u.vpnmgr.AddSiteExclusion(domain)
+						_ = u.vpnmgr.AddSiteExclusion(domain)
 					}
-					reloadExclusions()
+					reloadExclusionsAndSave()
 				}()
 			} else {
 				dialog.ShowInformation("Import", "No new unique domains found", u.dashboardWindow)
@@ -935,7 +978,7 @@ func (u *UI) exclusionsPanel(stopCh <-chan struct{}) *fyne.Container {
 						fmt.Printf("remove exclusion error: %v\n", err)
 					}
 				}
-				reloadExclusions()
+				reloadExclusionsAndSave()
 			}()
 		}, u.dashboardWindow)
 	})
@@ -976,6 +1019,34 @@ func (u *UI) exclusionsPanel(stopCh <-chan struct{}) *fyne.Container {
 				}
 				refreshFiltered()
 				updateClearButtonState()
+			})
+		}()
+	}
+
+	reloadExclusionsAndSave = func() {
+		go func() {
+			newMode, newExclusions, loadErr := u.vpnmgr.GetSiteExclusions()
+			if loadErr != nil {
+				fmt.Printf("reload exclusions error: %v\n", loadErr)
+				return
+			}
+			u.setDomainsCount(len(newExclusions))
+			fyne.Do(func() {
+				mode = newMode
+				exclusions = newExclusions
+				if modeRadio != nil {
+					if mode == commands.SiteExclusionModeGeneral {
+						modeRadio.SetSelected(optionGeneral)
+					} else {
+						modeRadio.SetSelected(optionSelective)
+					}
+				}
+				refreshFiltered()
+				updateClearButtonState()
+
+				if err := commands.SaveExclusionsForMode(mode, exclusions); err != nil {
+					fmt.Printf("failed to auto-save exclusions for mode %s: %v\n", mode, err)
+				}
 			})
 		}()
 	}
