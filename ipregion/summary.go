@@ -11,10 +11,15 @@ func isCountableValue(v string) bool {
 		return false
 	}
 	switch strings.ToLower(v) {
-	case "yes", "no", "null", "n/a":
+	case "yes", "no", "null", "n/a", "—":
 		return false
 	}
 	return true
+}
+
+// IsRegionCountryCode reports whether v is a country ISO code suitable for comparison and highlighting.
+func IsRegionCountryCode(v string) bool {
+	return isCountableValue(v)
 }
 
 // BuildSummary aggregates country codes from report results into percentages.

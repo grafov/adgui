@@ -38,8 +38,7 @@ func (u *UI) ipRegionPanel() *fyne.Container {
 
 	vpnLabel := widget.NewLabel("")
 
-	summaryTitle := widget.NewLabel(lang.X("ip_region.summary.title", "Top regions"))
-	summaryTitle.TextStyle = fyne.TextStyle{Bold: true}
+	summaryTitle := newIPRegionSectionTitle(lang.X("ip_region.summary.title", "Top regions"))
 	summaryTitle.Hide()
 
 	summaryEmpty := widget.NewLabel(lang.X("ip_region.no_results", "No region data collected."))
@@ -94,10 +93,10 @@ func (u *UI) ipRegionPanel() *fyne.Container {
 
 			nameLbl.SetText(row.Service)
 			v4, v6 := formatRegionColumns(row.IPv4, row.IPv6, showIPv6)
-			ipv4Lbl.SetText(formatRegionCell(v4, mismatchVPN(u, row.IPv4)))
+			applyRegionLabel(ipv4Lbl, u, v4)
 			if showIPv6 {
 				ipv6Lbl.Show()
-				ipv6Lbl.SetText(formatRegionCell(v6, mismatchVPN(u, row.IPv6)))
+				applyRegionLabel(ipv6Lbl, u, v6)
 			} else {
 				ipv6Lbl.Hide()
 			}
@@ -258,8 +257,7 @@ func (u *UI) ipRegionPanel() *fyne.Container {
 		summaryRowsBox,
 	)
 
-	servicesTitle := widget.NewLabel(lang.X("ip_region.services.title", "Services"))
-	servicesTitle.TextStyle = fyne.TextStyle{Bold: true}
+	servicesTitle := newIPRegionSectionTitle(lang.X("ip_region.services.title", "Services"))
 
 	top := container.NewVBox(
 		header,
@@ -273,6 +271,13 @@ func (u *UI) ipRegionPanel() *fyne.Container {
 	)
 
 	return container.NewBorder(top, nil, nil, nil, list)
+}
+
+func newIPRegionSectionTitle(text string) *widget.RichText {
+	return widget.NewRichText(&widget.TextSegment{
+		Text:  text,
+		Style: widget.RichTextStyleSubHeading,
+	})
 }
 
 func newIPRegionTableHeader(first, ipv4, ipv6 string) (*widget.Label, *widget.Label, *widget.Label, *fyne.Container) {
@@ -342,27 +347,25 @@ func normalizeRegionCode(code string) string {
 	return code
 }
 
-func formatRegionCell(code string, mismatch bool) string {
-	code = normalizeRegionCode(code)
-	if code == lang.X("ip_region.same_as_ipv4", "—") {
-		return code
-	}
-	if mismatch && code != ipregion.NotAvailable {
-		return "! " + code
-	}
-	return code
+func applyRegionLabel(lbl *widget.Label, u *UI, code string) {
+	lbl.Importance = regionLabelImportance(u, code)
+	lbl.SetText(code)
+	lbl.Refresh()
 }
 
-func mismatchVPN(u *UI, code string) bool {
-	code = normalizeRegionCode(code)
-	if code == ipregion.NotAvailable || code == lang.X("ip_region.same_as_ipv4", "—") {
-		return false
+func regionLabelImportance(u *UI, code string) widget.Importance {
+	if !ipregion.IsRegionCountryCode(code) || code == lang.X("ip_region.same_as_ipv4", "—") {
+		return widget.MediumImportance
 	}
 	loc, ok := u.vpnmgr.ConnectedLocation()
 	if !ok || loc.ISO == "" {
-		return false
+		return widget.MediumImportance
 	}
-	return !strings.EqualFold(code, loc.ISO)
+	code = normalizeRegionCode(code)
+	if strings.EqualFold(code, loc.ISO) {
+		return widget.SuccessImportance
+	}
+	return widget.DangerImportance
 }
 
 func buildVPNCompareLine(u *UI, report *ipregion.Report) string {

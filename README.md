@@ -96,3 +96,31 @@ The **Connect To...** location selector lets you bookmark VPN locations with the
 Click the **★** column header to toggle sorting bookmarked locations first. Click a row star to add or remove a bookmark without connecting.
 
 Country flags in the location list use SVG assets from [lipis/flag-icons](https://github.com/lipis/flag-icons) (MIT license), embedded in the application binary.
+
+### IP Region (Country Detection)
+
+The **IP Region** tab on the dashboard checks how GeoIP databases and popular web services classify your current egress IP address. Use it to verify that AdGuard VPN routes traffic through the expected country, or to see whether different services disagree about your location.
+
+The check runs only when you press **Where am I?** — opening the tab does not contact the network. While a scan is in progress, a progress bar shows the current service and attempt counter; press the button again to cancel.
+
+#### Results
+
+- **Summary** — top countries by how many services reported each ISO code (IPv4 and IPv6 percentages when both are available)
+- **Services table** — per-service country codes for IPv4 and IPv6
+- **VPN comparison** — when connected, compares the selected VPN location with the consensus from external checks; mismatches are marked with `!` in the table
+
+Primary probes query GeoIP APIs (MaxMind, ipinfo.io, Cloudflare, ip-api.com, and others). Custom probes infer region from responses of popular sites (Google, YouTube, Netflix, Spotify, Steam, and others). Logic is ported from [Davoyan/ipregion](https://github.com/Davoyan/ipregion) (MIT license).
+
+#### Optional API Keys
+
+Some services accept your own API keys. Create `~/.config/adgui/service-keys` (INI format) with any of:
+
+```ini
+IPREGISTRY_KEY=your_key
+GEOAPIFY_KEY=your_key
+SPOTIFY_CLIENT_ID=your_client_id
+SPOTIFY_API_KEY=your_api_key
+AIRPORT_CODES_AUTH=your_token
+```
+
+If the file or a key is missing, built-in demo defaults are used where available; other services work without keys.

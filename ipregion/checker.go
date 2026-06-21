@@ -142,7 +142,6 @@ func (c *Checker) Run(ctx context.Context, opts Options) (*Report, error) {
 	g.SetLimit(opts.MaxConcurrency)
 
 	for i, task := range tasks {
-		i, task := i, task
 		g.Go(func() error {
 			if gctx.Err() != nil {
 				return nil
