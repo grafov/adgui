@@ -970,6 +970,7 @@ func (u *UI) LocationSelector() {
 
 		filterEntry := widget.NewEntry()
 		filterEntry.SetPlaceHolder("Filter by city or country...")
+		currentFilter := ""
 
 		applyBookmarkFlags := func(locs []locations.Location) []locations.Location {
 			set := commands.LocationBookmarkSet(bookmarks)
@@ -981,7 +982,7 @@ func (u *UI) LocationSelector() {
 
 		var table *widget.Table
 		refreshTable := func() {
-			filteredLocations = locations.FilterLocations(allLocations, filterEntry.Text)
+			filteredLocations = locations.FilterLocations(allLocations, currentFilter)
 			filteredLocations = applyBookmarkFlags(filteredLocations)
 			filteredLocations = locations.SortLocationsWithBookmarks(
 				filteredLocations,
@@ -989,7 +990,9 @@ func (u *UI) LocationSelector() {
 				sortAscending,
 				bookmarksFirst,
 			)
-			table.Refresh()
+			if table != nil {
+				table.Refresh()
+			}
 		}
 
 		toggleBookmark := func(loc locations.Location) {
@@ -1137,7 +1140,8 @@ func (u *UI) LocationSelector() {
 			window.Hide()
 		}
 
-		filterEntry.OnChanged = func(_ string) {
+		filterEntry.OnChanged = func(query string) {
+			currentFilter = query
 			refreshTable()
 		}
 

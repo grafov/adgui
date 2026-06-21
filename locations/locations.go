@@ -167,6 +167,7 @@ func ParseLocations(output string) []Location {
 
 // FilterLocations фильтрует локации по имени города или страны
 func FilterLocations(locations []Location, query string) []Location {
+	query = strings.TrimSpace(query)
 	if query == "" {
 		return locations
 	}

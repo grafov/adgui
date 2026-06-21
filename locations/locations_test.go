@@ -288,6 +288,12 @@ var _ = Describe("FilterLocations", func() {
 			Expect(filtered).To(HaveLen(2))
 		})
 
+		It("should trim spaces around the query", func() {
+			filtered := locations.FilterLocations(testLocations, "  riga  ")
+			Expect(filtered).To(HaveLen(1))
+			Expect(filtered[0].City).To(Equal("Riga"))
+		})
+
 		It("should return empty slice when no matches found", func() {
 			filtered := locations.FilterLocations(testLocations, "nonexistent")
 			Expect(filtered).To(BeEmpty())
