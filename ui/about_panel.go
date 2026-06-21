@@ -25,5 +25,6 @@ func (u *UI) aboutPanel(appVersion string) *fyne.Container {
 		header,
 		adguiLabel,
 		cliLabel,
+		widget.NewLabel(lang.X("about.ipregion", "IP region checks ported from Davoyan/ipregion (MIT)")),
 	)
 }

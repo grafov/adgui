@@ -45,7 +45,7 @@ const (
 	locationTableCols  = 6
 )
 
-const domainsTabIndex = 2
+const domainsTabIndex = 3
 
 type (
 	// Properties related to UI.
@@ -371,6 +371,7 @@ func (u *UI) Dashboard() string {
 	u.startPasteWatcher()
 	tabs := container.NewAppTabs(
 		container.NewTabItem(lang.X("dashboard.tab.connections", "Connections"), connectionsContent),
+		container.NewTabItem(lang.X("dashboard.tab.ip_region", "IP Region"), u.ipRegionPanel()),
 		container.NewTabItem(lang.X("dashboard.tab.license", "License"), license),
 		container.NewTabItem(lang.X("dashboard.tab.domains", "Domains"), u.exclusionsPanel(u.pasteWatchStop)),
 		container.NewTabItem(lang.X("dashboard.tab.cmd_queue", "Cmd queue"), u.cmdQueuePanel()),
