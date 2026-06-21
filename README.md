@@ -98,7 +98,7 @@ Country flags in the location list use SVG assets from [lipis/flag-icons](https:
 
 ### IP Region (Country Detection)
 
-The **IP Region** tab on the dashboard checks how GeoIP databases and popular web services classify your current egress IP address. Use it to verify that AdGuard VPN routes traffic through the expected country, or to see whether different services disagree about your location.
+This feature implemented just in Adgui and not a part of Adguard VPN. The feature could help you analyze effeciency of your VPN connection. The **IP Region** tab on the dashboard checks how GeoIP databases and popular web services classify your current egress IP address. Use it to verify that AdGuard VPN routes traffic through the expected country, or to see whether different services disagree about your location.
 
 The check runs only when you press **Where am I?** — opening the tab does not contact the network. While a scan is in progress, a progress bar shows the current service and attempt counter; press the button again to cancel.
 
