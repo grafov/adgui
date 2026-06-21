@@ -2,6 +2,7 @@ package commands_test
 
 import (
 	"adgui/commands"
+	"adgui/locations"
 	"os"
 	"path/filepath"
 
@@ -12,43 +13,26 @@ import (
 var _ = Describe("Location bookmarks persistence", func() {
 	var tempHome string
 	var oldHome string
-	var oldXDG string
 
 	BeforeEach(func() {
 		var err error
 		tempHome, err = os.MkdirTemp("", "adgui-bookmarks-home-*")
 		Expect(err).NotTo(HaveOccurred())
 		oldHome = os.Getenv("HOME")
-		oldXDG = os.Getenv("XDG_DATA_HOME")
 		Expect(os.Setenv("HOME", tempHome)).To(Succeed())
-		Expect(os.Unsetenv("XDG_DATA_HOME")).To(Succeed())
 	})
 
 	AfterEach(func() {
 		if oldHome != "" {
 			_ = os.Setenv("HOME", oldHome)
 		}
-		if oldXDG != "" {
-			_ = os.Setenv("XDG_DATA_HOME", oldXDG)
-		} else {
-			_ = os.Unsetenv("XDG_DATA_HOME")
-		}
 		_ = os.RemoveAll(tempHome)
 	})
 
-	It("stores bookmarks under ~/.local/share/adgui/location-bookmarks", func() {
+	It("stores bookmarks under ~/.config/adgui/bookmarks", func() {
 		path, err := commands.GetLocationBookmarksPath()
 		Expect(err).NotTo(HaveOccurred())
-		Expect(path).To(Equal(filepath.Join(tempHome, ".local", "share", "adgui", "location-bookmarks")))
-	})
-
-	It("respects XDG_DATA_HOME when set", func() {
-		xdgDir := filepath.Join(tempHome, "custom-data")
-		Expect(os.Setenv("XDG_DATA_HOME", xdgDir)).To(Succeed())
-
-		path, err := commands.GetLocationBookmarksPath()
-		Expect(err).NotTo(HaveOccurred())
-		Expect(path).To(Equal(filepath.Join(xdgDir, "adgui", "location-bookmarks")))
+		Expect(path).To(Equal(filepath.Join(tempHome, ".config", "adgui", "bookmarks")))
 	})
 
 	It("returns empty slice when file is missing", func() {
@@ -98,5 +82,85 @@ var _ = Describe("Location bookmarks persistence", func() {
 		key1 := commands.LocationBookmarkKey("DE", "Germany", "Frankfurt")
 		key2 := commands.LocationBookmarkKey("DE", "Germany", "Frankfurt")
 		Expect(key1).To(Equal(key2))
+	})
+})
+
+var _ = Describe("PruneAndSaveLocationBookmarks", func() {
+	var tempHome string
+	var oldHome string
+
+	BeforeEach(func() {
+		var err error
+		tempHome, err = os.MkdirTemp("", "adgui-bookmarks-prune-*")
+		Expect(err).NotTo(HaveOccurred())
+		oldHome = os.Getenv("HOME")
+		Expect(os.Setenv("HOME", tempHome)).To(Succeed())
+	})
+
+	AfterEach(func() {
+		if oldHome != "" {
+			_ = os.Setenv("HOME", oldHome)
+		}
+		_ = os.RemoveAll(tempHome)
+	})
+
+	It("keeps all bookmarks when every entry matches a location", func() {
+		bookmarks := []commands.LocationBookmark{
+			{ISO: "DE", Country: "Germany", City: "Frankfurt"},
+			{ISO: "LV", Country: "Latvia", City: "Riga"},
+		}
+		Expect(commands.SaveLocationBookmarks(bookmarks)).To(Succeed())
+
+		locs := []locations.Location{
+			{ISO: "DE", Country: "Germany", City: "Frankfurt", Ping: 37},
+			{ISO: "LV", Country: "Latvia", City: "Riga", Ping: 29},
+			{ISO: "US", Country: "United States", City: "New York", Ping: 121},
+		}
+
+		pruned, err := commands.PruneAndSaveLocationBookmarks(bookmarks, locs)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(pruned).To(HaveLen(2))
+
+		loaded, err := commands.LoadLocationBookmarks()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(loaded).To(HaveLen(2))
+	})
+
+	It("removes stale bookmarks and rewrites the file", func() {
+		bookmarks := []commands.LocationBookmark{
+			{ISO: "DE", Country: "Germany", City: "Frankfurt"},
+			{ISO: "XX", Country: "Removed", City: "Old City"},
+		}
+		Expect(commands.SaveLocationBookmarks(bookmarks)).To(Succeed())
+
+		locs := []locations.Location{
+			{ISO: "DE", Country: "Germany", City: "Frankfurt", Ping: 37},
+		}
+
+		pruned, err := commands.PruneAndSaveLocationBookmarks(bookmarks, locs)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(pruned).To(HaveLen(1))
+		Expect(pruned[0].City).To(Equal("Frankfurt"))
+
+		loaded, err := commands.LoadLocationBookmarks()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(loaded).To(HaveLen(1))
+		Expect(loaded[0].City).To(Equal("Frankfurt"))
+	})
+
+	It("does not modify bookmarks when the location list is empty", func() {
+		bookmarks := []commands.LocationBookmark{
+			{ISO: "DE", Country: "Germany", City: "Frankfurt"},
+		}
+		Expect(commands.SaveLocationBookmarks(bookmarks)).To(Succeed())
+
+		pruned, err := commands.PruneAndSaveLocationBookmarks(bookmarks, nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(pruned).To(Equal(bookmarks))
+
+		loaded, err := commands.LoadLocationBookmarks()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(loaded).To(HaveLen(1))
+		Expect(loaded[0].City).To(Equal("Frankfurt"))
 	})
 })

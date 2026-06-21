@@ -8,9 +8,14 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"adgui/locations"
 )
 
-const locationBookmarksFile = "location-bookmarks"
+const (
+	locationBookmarksDir  = "adgui"
+	locationBookmarksFile = "bookmarks"
+)
 
 // LocationBookmark identifies a VPN location saved by the user.
 type LocationBookmark struct {
@@ -28,11 +33,11 @@ func LocationBookmarkKey(iso, country, city string) string {
 
 // GetLocationBookmarksPath returns the absolute path to the location bookmarks file.
 func GetLocationBookmarksPath() (string, error) {
-	dir, err := GetDataDir()
+	home, err := os.UserHomeDir()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to get user home directory: %w", err)
 	}
-	return filepath.Join(dir, locationBookmarksFile), nil
+	return filepath.Join(home, ".config", locationBookmarksDir, locationBookmarksFile), nil
 }
 
 // LoadLocationBookmarks reads saved location bookmarks from disk.
@@ -86,7 +91,7 @@ func SaveLocationBookmarks(bookmarks []LocationBookmark) error {
 
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return fmt.Errorf("failed to create data directory: %w", err)
+		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
 	bookmarks = dedupeLocationBookmarks(bookmarks)
@@ -126,6 +131,53 @@ func LocationBookmarkSet(bookmarks []LocationBookmark) map[string]struct{} {
 		set[key] = struct{}{}
 	}
 	return set
+}
+
+// PruneAndSaveLocationBookmarks removes bookmarks that no longer exist in locs.
+// When locs is empty, bookmarks are returned unchanged and the file is not modified.
+// When stale bookmarks are removed, the file is rewritten via SaveLocationBookmarks.
+func PruneAndSaveLocationBookmarks(bookmarks []LocationBookmark, locs []locations.Location) ([]LocationBookmark, error) {
+	if len(locs) == 0 {
+		return bookmarks, nil
+	}
+
+	available := make(map[string]struct{}, len(locs))
+	for _, loc := range locs {
+		key := LocationBookmarkKey(loc.ISO, loc.Country, loc.City)
+		available[key] = struct{}{}
+	}
+
+	pruned := make([]LocationBookmark, 0, len(bookmarks))
+	for _, bookmark := range bookmarks {
+		key := LocationBookmarkKey(bookmark.ISO, bookmark.Country, bookmark.City)
+		if _, ok := available[key]; ok {
+			pruned = append(pruned, bookmark)
+		}
+	}
+	pruned = dedupeLocationBookmarks(pruned)
+
+	if locationBookmarkKeysEqual(bookmarks, pruned) {
+		return pruned, nil
+	}
+
+	if err := SaveLocationBookmarks(pruned); err != nil {
+		return pruned, err
+	}
+	return pruned, nil
+}
+
+func locationBookmarkKeysEqual(a, b []LocationBookmark) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	setA := LocationBookmarkSet(a)
+	for _, bookmark := range b {
+		key := LocationBookmarkKey(bookmark.ISO, bookmark.Country, bookmark.City)
+		if _, ok := setA[key]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 func dedupeLocationBookmarks(bookmarks []LocationBookmark) []LocationBookmark {

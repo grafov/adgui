@@ -165,7 +165,7 @@ func ParseLocations(output string) []Location {
 	return locations
 }
 
-// FilterLocations фильтрует локации по имени города или страны
+// FilterLocations фильтрует локации по ISO-коду, имени города или страны
 func FilterLocations(locations []Location, query string) []Location {
 	query = strings.TrimSpace(query)
 	if query == "" {
@@ -176,7 +176,9 @@ func FilterLocations(locations []Location, query string) []Location {
 	query = strings.ToLower(query)
 
 	for _, loc := range locations {
-		if strings.Contains(strings.ToLower(loc.City), query) || strings.Contains(strings.ToLower(loc.Country), query) {
+		if strings.Contains(strings.ToLower(loc.ISO), query) ||
+			strings.Contains(strings.ToLower(loc.City), query) ||
+			strings.Contains(strings.ToLower(loc.Country), query) {
 			filtered = append(filtered, loc)
 		}
 	}

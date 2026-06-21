@@ -1159,6 +1159,14 @@ func (u *UI) LocationSelector() {
 		go func() {
 			locs := u.vpnmgr.ListLocations()
 			fyne.Do(func() {
+				if len(locs) > 0 {
+					pruned, pruneErr := commands.PruneAndSaveLocationBookmarks(bookmarks, locs)
+					if pruneErr != nil {
+						fmt.Printf("failed to prune location bookmarks: %v\n", pruneErr)
+					} else {
+						bookmarks = pruned
+					}
+				}
 				allLocations = applyBookmarkFlags(locs)
 				refreshTable()
 			})

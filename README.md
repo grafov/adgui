@@ -87,7 +87,7 @@ another-site.net
 
 The **Connect To...** location selector lets you bookmark VPN locations with the star column on the right. Bookmarked locations are saved to:
 
-- `~/.local/share/adgui/location-bookmarks` (or `$XDG_DATA_HOME/adgui/location-bookmarks`)
+- `~/.config/adgui/bookmarks`
 
 Click the **★** column header to toggle sorting bookmarked locations first. Click a row star to add or remove a bookmark without connecting.
 

@@ -288,6 +288,13 @@ var _ = Describe("FilterLocations", func() {
 			Expect(filtered).To(HaveLen(2))
 		})
 
+		It("should filter by ISO code", func() {
+			filtered := locations.FilterLocations(testLocations, "de")
+			Expect(filtered).To(HaveLen(2))
+			Expect(filtered[0].ISO).To(Equal("DE"))
+			Expect(filtered[1].ISO).To(Equal("DE"))
+		})
+
 		It("should trim spaces around the query", func() {
 			filtered := locations.FilterLocations(testLocations, "  riga  ")
 			Expect(filtered).To(HaveLen(1))
