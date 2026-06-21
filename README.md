@@ -4,6 +4,10 @@ Simple GUI for control CLI for AdGuard VPN. Linux XLibre/Wayland.
 
 **Works partially yet. Development just in progress.**
 
+## Localization
+
+The interface language is selected automatically from the system locale (Fyne i18n). Supported UI languages: English (`en`), Russian (`ru`), and Esperanto (`eo`). English is used as fallback when no matching translation is available.
+
 ## Installation
 
 It tries to install into protected directory `/usr/local/bin` that requires root privileges.

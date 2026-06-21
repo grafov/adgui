@@ -8,6 +8,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/lang"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 )
@@ -26,7 +27,7 @@ func (u *UI) connectionsPanel() (*fyne.Container, *connectionsPanelWidgets) {
 		cityLabel:    canvas.NewText("", ConnectedColor),
 		countryLabel: canvas.NewText("", ConnectedColor),
 		pingLabel:    canvas.NewText("", ConnectedColor),
-		statusLabel:  canvas.NewText("Disconnected", DisconnectedStatusColor),
+		statusLabel:  canvas.NewText(lang.X("connections.disconnected", "Disconnected"), DisconnectedStatusColor),
 		historyBox:   container.NewVBox(),
 	}
 	widgets.statusLabel.TextSize = 36
@@ -50,7 +51,7 @@ func (u *UI) connectionsPanel() (*fyne.Container, *connectionsPanelWidgets) {
 	u.dashboardConnectBtn = connectBtn
 	u.updateDashboardButtons()
 
-	connectToBtn := widget.NewButton("Connect To...", func() {
+	connectToBtn := widget.NewButton(lang.X("connections.connect_to", "Connect To..."), func() {
 		u.LocationSelector()
 	})
 	buttonContainer := container.NewHBox(layout.NewSpacer(), connectBtn, connectToBtn, layout.NewSpacer())
@@ -63,7 +64,7 @@ func (u *UI) connectionsPanel() (*fyne.Container, *connectionsPanelWidgets) {
 	)
 	centerArea := container.NewCenter(centerContent)
 
-	historyHeader := widget.NewLabel("Previously connected to:")
+	historyHeader := widget.NewLabel(lang.X("connections.history.header", "Previously connected to:"))
 	historyHeader.TextStyle.Bold = true
 	historySection := container.NewVBox(
 		widget.NewSeparator(),
@@ -103,7 +104,7 @@ func (u *UI) refreshConnectionsPanel(w *connectionsPanelWidgets) {
 		w.countryLabel.Color = ConnectedColor
 		w.pingLabel.Color = ConnectedColor
 	} else {
-		w.statusLabel.Text = "Disconnected"
+		w.statusLabel.Text = lang.X("connections.disconnected", "Disconnected")
 		w.statusLabel.Color = DisconnectedStatusColor
 		w.cityLabel.Text = ""
 		w.countryLabel.Text = ""
@@ -132,13 +133,6 @@ func (u *UI) refreshConnectionsPanel(w *connectionsPanelWidgets) {
 	}
 	w.historyBox.Refresh()
 	w.historySection.Refresh()
-}
-
-func formatPing(ping int) string {
-	if ping < 0 {
-		return "Ping: n/a"
-	}
-	return fmt.Sprintf("Ping: %d ms", ping)
 }
 
 func formatHistoryEntry(entry commands.ConnectionHistoryEntry) string {

@@ -20,6 +20,7 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/driver/desktop"
+	"fyne.io/fyne/v2/lang"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/widget"
@@ -91,6 +92,9 @@ type (
 
 func New(vpnmgr *commands.VPNManager, appVersion string) *UI {
 	myApp := app.NewWithID("AdGuard VPN Client")
+	if err := loadTranslations(); err != nil {
+		fyne.LogError("failed to load translations", err)
+	}
 	myApp.SetIcon(theme.DisconnectedIcon)
 	logic := withLogicIncluded{
 		vpnmgr:    vpnmgr,
@@ -150,19 +154,19 @@ func (u *UI) stopPasteWatcher() {
 
 func (u *UI) createTrayMenu() {
 	status := fyne.NewMenuItem("Adguard VPN", func() {})
-	dashboard := fyne.NewMenuItem("Show dashboard", func() {
+	dashboard := fyne.NewMenuItem(lang.X("tray.menu.show_dashboard", "Show dashboard"), func() {
 		u.Dashboard()
 	})
-	connectAuto := fyne.NewMenuItem("Connect the best", func() {
+	connectAuto := fyne.NewMenuItem(lang.X("tray.menu.connect_best", "Connect the best"), func() {
 		go u.vpnmgr.ConnectAuto()
 	})
-	connectTo := fyne.NewMenuItem("Connect To...", func() {
+	connectTo := fyne.NewMenuItem(lang.X("tray.menu.connect_to", "Connect To..."), func() {
 		u.LocationSelector()
 	})
-	disconnect := fyne.NewMenuItem("Disconnect", func() {
+	disconnect := fyne.NewMenuItem(lang.X("tray.menu.disconnect", "Disconnect"), func() {
 		go u.vpnmgr.Disconnect()
 	})
-	quitItem := fyne.NewMenuItem("Quit", func() {
+	quitItem := fyne.NewMenuItem(lang.X("tray.menu.quit", "Quit"), func() {
 		u.stopPasteWatcher()
 		u.Fyne.Quit()
 	})
@@ -199,17 +203,20 @@ func (u *UI) updateMenuItems() {
 		fyne.Do(func() {
 			items := u.menu.Items
 			if u.vpnmgr.IsConnected() {
-				u.menu.Label = "VPN connected"
+				u.menu.Label = lang.X("tray.menu.vpn_connected", "VPN connected")
 				items[0].Icon = theme.MenuConnectedIcon
 				modeSuffix := "GEN"
 				if u.vpnmgr.SiteExclusionsMode() == commands.SiteExclusionModeSelective {
 					modeSuffix = "SEL"
 				}
-				items[0].Label = fmt.Sprintf("%s mode:%s", strings.ToUpper(u.vpnmgr.Location()), modeSuffix)
+				items[0].Label = lang.X("tray.status.mode", "{{.Location}} mode:{{.Mode}}", map[string]any{
+					"Location": strings.ToUpper(u.vpnmgr.Location()),
+					"Mode":     modeSuffix,
+				})
 			} else {
-				u.menu.Label = "VPN disconected"
+				u.menu.Label = lang.X("tray.menu.vpn_disconnected", "VPN disconnected")
 				items[0].Icon = theme.MenuDisconnectedIcon
-				items[0].Label = "OFF"
+				items[0].Label = lang.X("tray.menu.off", "OFF")
 			}
 			connected := u.vpnmgr.IsConnected()
 			if domainsMenuItem != nil {
@@ -271,13 +278,6 @@ func (u *UI) getDomainsCount() int {
 	return count
 }
 
-func domainsMenuLabel(count int) string {
-	if count > 0 {
-		return fmt.Sprintf("Domains (%d)", count)
-	}
-	return "Domains"
-}
-
 func (u *UI) showDashboardTab(index int) {
 	u.Dashboard()
 	u.selectDashboardTab(index)
@@ -305,9 +305,9 @@ func (u *UI) updateDashboardButtons() {
 
 	connected := u.vpnmgr.IsConnected()
 	if connected {
-		u.dashboardConnectBtn.SetText("Disconnect")
+		u.dashboardConnectBtn.SetText(lang.X("dashboard.disconnect", "Disconnect"))
 	} else {
-		u.dashboardConnectBtn.SetText("Connect")
+		u.dashboardConnectBtn.SetText(lang.X("dashboard.connect", "Connect"))
 	}
 }
 
@@ -360,7 +360,7 @@ func (u *UI) Dashboard() string {
 	}
 
 	// Create new dashboard window
-	window := u.Fyne.NewWindow("adgui: VPN Dashboard")
+	window := u.Fyne.NewWindow(lang.X("dashboard.window_title", "adgui: VPN Dashboard"))
 	window.Resize(fyne.NewSize(800, 600))
 	u.dashboardWindow = window
 
@@ -370,11 +370,11 @@ func (u *UI) Dashboard() string {
 	license := u.licensePanel()
 	u.startPasteWatcher()
 	tabs := container.NewAppTabs(
-		container.NewTabItem("Connections", connectionsContent),
-		container.NewTabItem("License", license),
-		container.NewTabItem("Domains", u.exclusionsPanel(u.pasteWatchStop)),
-		container.NewTabItem("Cmd queue", u.cmdQueuePanel()),
-		container.NewTabItem("About", u.aboutPanel(u.appVersion)),
+		container.NewTabItem(lang.X("dashboard.tab.connections", "Connections"), connectionsContent),
+		container.NewTabItem(lang.X("dashboard.tab.license", "License"), license),
+		container.NewTabItem(lang.X("dashboard.tab.domains", "Domains"), u.exclusionsPanel(u.pasteWatchStop)),
+		container.NewTabItem(lang.X("dashboard.tab.cmd_queue", "Cmd queue"), u.cmdQueuePanel()),
+		container.NewTabItem(lang.X("dashboard.tab.about", "About"), u.aboutPanel(u.appVersion)),
 	)
 	u.dashboardTabs = tabs
 	tabs.SetTabLocation(container.TabLocationLeading)
@@ -396,7 +396,7 @@ func (u *UI) Dashboard() string {
 }
 
 func (u *UI) licensePanel() *fyne.Container {
-	licenseLabel := parseAnsi("Loading license...")
+	licenseLabel := parseAnsi(lang.X("license.loading", "Loading license..."))
 	go func() {
 		text := u.vpnmgr.License()
 		fyne.Do(func() {
@@ -408,7 +408,7 @@ func (u *UI) licensePanel() *fyne.Container {
 
 	return container.New(
 		layout.NewVBoxLayout(),
-		widget.NewLabel("AdGuard license"),
+		widget.NewLabel(lang.X("license.title", "AdGuard license")),
 		licenseLabel,
 	)
 }
@@ -443,15 +443,22 @@ func (u *UI) exclusionsPanel(stopCh <-chan struct{}) *fyne.Container {
 	}
 
 	filterEntry := widget.NewEntry()
-	filterEntry.SetPlaceHolder("Filter or enter domain...")
+	filterEntry.SetPlaceHolder(lang.X("domains.filter.placeholder", "Filter or enter domain..."))
 	clipboard := u.Fyne.Clipboard()
 
 	var exclusionsList *widget.List
 	var modeRadio *widget.RadioGroup
-	const (
-		optionGeneral   = "The domains in the list excluded"
-		optionSelective = "Only domains in the list included"
-	)
+
+	selectExclusionModeRadio := func() {
+		if modeRadio == nil {
+			return
+		}
+		if mode == commands.SiteExclusionModeGeneral {
+			modeRadio.SetSelected(exclusionModeGeneralLabel())
+		} else {
+			modeRadio.SetSelected(exclusionModeSelectiveLabel())
+		}
+	}
 
 	refreshFiltered := func() {
 		filtered = filterExclusions(exclusions, currentQuery)
@@ -474,13 +481,7 @@ func (u *UI) exclusionsPanel(stopCh <-chan struct{}) *fyne.Container {
 			fyne.Do(func() {
 				mode = newMode
 				exclusions = newExclusions
-				if modeRadio != nil {
-					if mode == commands.SiteExclusionModeGeneral {
-						modeRadio.SetSelected(optionGeneral)
-					} else {
-						modeRadio.SetSelected(optionSelective)
-					}
-				}
+				selectExclusionModeRadio()
 				refreshFiltered()
 			})
 		}()
@@ -492,7 +493,7 @@ func (u *UI) exclusionsPanel(stopCh <-chan struct{}) *fyne.Container {
 		},
 		func() fyne.CanvasObject {
 			label := widget.NewLabel("domain")
-			removeBtn := widget.NewButton("X", nil)
+			removeBtn := widget.NewButton(lang.X("domains.button.remove", "X"), nil)
 			return container.NewHBox(label, layout.NewSpacer(), removeBtn)
 		},
 		func(id widget.ListItemID, obj fyne.CanvasObject) {
@@ -541,7 +542,7 @@ func (u *UI) exclusionsPanel(stopCh <-chan struct{}) *fyne.Container {
 		appendCurrent()
 	}
 
-	appendBtn := widget.NewButton("Append", func() {
+	appendBtn := widget.NewButton(lang.X("domains.button.append", "Append"), func() {
 		appendCurrent()
 	})
 	var pasteBtn *widget.Button
@@ -620,7 +621,7 @@ func (u *UI) exclusionsPanel(stopCh <-chan struct{}) *fyne.Container {
 		})
 	}
 
-	pasteBtn = widget.NewButton("Paste", func() {
+	pasteBtn = widget.NewButton(lang.X("domains.button.paste", "Paste"), func() {
 		pasteFromClipboard()
 	})
 
@@ -653,15 +654,11 @@ func (u *UI) exclusionsPanel(stopCh <-chan struct{}) *fyne.Container {
 		)
 	}
 
-	modeRadio = widget.NewRadioGroup([]string{optionGeneral, optionSelective}, nil)
-	if mode == commands.SiteExclusionModeGeneral {
-		modeRadio.SetSelected(optionGeneral)
-	} else {
-		modeRadio.SetSelected(optionSelective)
-	}
+	modeRadio = widget.NewRadioGroup([]string{exclusionModeGeneralLabel(), exclusionModeSelectiveLabel()}, nil)
+	selectExclusionModeRadio()
 	modeRadio.OnChanged = func(value string) {
 		targetMode := commands.SiteExclusionModeSelective
-		if value == optionGeneral {
+		if value == exclusionModeGeneralLabel() {
 			targetMode = commands.SiteExclusionModeGeneral
 		}
 		if targetMode == mode {
@@ -675,11 +672,8 @@ func (u *UI) exclusionsPanel(stopCh <-chan struct{}) *fyne.Container {
 			if err := u.vpnmgr.SetSiteExclusionsMode(targetMode, snapshot); err != nil {
 				fmt.Printf("set exclusions mode error: %v\n", err)
 				fyne.Do(func() {
-					if previousMode == commands.SiteExclusionModeGeneral {
-						modeRadio.SetSelected(optionGeneral)
-					} else {
-						modeRadio.SetSelected(optionSelective)
-					}
+					mode = previousMode
+					selectExclusionModeRadio()
 				})
 				return
 			}
@@ -695,7 +689,7 @@ func (u *UI) exclusionsPanel(stopCh <-chan struct{}) *fyne.Container {
 	}
 	modeControls := container.NewVBox(modeRadio)
 
-	exportBtn := widget.NewButton("Export", func() {
+	exportBtn := widget.NewButton(lang.X("domains.button.export", "Export"), func() {
 		defaultName := mode.String() + ".adgui"
 		saveDlg := dialog.NewFileSave(func(writer fyne.URIWriteCloser, err error) {
 			if err != nil {
@@ -730,7 +724,11 @@ func (u *UI) exclusionsPanel(stopCh <-chan struct{}) *fyne.Container {
 				}
 			}
 
-			dialog.ShowInformation("Export", "Exported "+exportedName, u.dashboardWindow)
+			dialog.ShowInformation(
+				lang.X("domains.export.title", "Export"),
+				lang.X("domains.export.message", "Exported {{.Name}}", map[string]any{"Name": exportedName}),
+				u.dashboardWindow,
+			)
 		}, u.dashboardWindow)
 		saveDlg.SetFileName(defaultName)
 		saveDlg.SetFilter(storage.NewExtensionFileFilter([]string{".adgui"}))
@@ -742,7 +740,7 @@ func (u *UI) exclusionsPanel(stopCh <-chan struct{}) *fyne.Container {
 		saveDlg.Show()
 	})
 
-	importBtn := widget.NewButton("Import", func() {
+	importBtn := widget.NewButton(lang.X("domains.button.import", "Import"), func() {
 		openDlg := dialog.NewFileOpen(func(reader fyne.URIReadCloser, err error) {
 			if err != nil {
 				dialog.ShowError(err, u.dashboardWindow)
@@ -769,11 +767,19 @@ func (u *UI) exclusionsPanel(stopCh <-chan struct{}) *fyne.Container {
 			}
 
 			if len(toAdd) == 0 {
-				dialog.ShowInformation("Import", "No new unique domains found", u.dashboardWindow)
+				dialog.ShowInformation(
+					lang.X("domains.import.title", "Import"),
+					lang.X("domains.import.no_new", "No new unique domains found"),
+					u.dashboardWindow,
+				)
 				return
 			}
 
-			hideProgress := showInfiniteProgressDialog("Importing", "Adding "+strconv.Itoa(len(toAdd))+" domains...", u.dashboardWindow)
+			hideProgress := showInfiniteProgressDialog(
+				lang.X("domains.import.progress.title", "Importing"),
+				lang.XN("domains.import.progress", "Adding {{.Count}} domains...", len(toAdd), map[string]any{"Count": len(toAdd)}),
+				u.dashboardWindow,
+			)
 			go func(domains []string) {
 				defer hideProgress()
 				var importErr error
@@ -793,12 +799,15 @@ func (u *UI) exclusionsPanel(stopCh <-chan struct{}) *fyne.Container {
 	})
 
 	var clearBtn *widget.Button
-	clearBtn = widget.NewButton("Clear", func() {
+	clearBtn = widget.NewButton(lang.X("domains.button.clear", "Clear"), func() {
 		if len(exclusions) == 0 {
 			return
 		}
 
-		dialog.ShowConfirm("Clear", "Clear all domains in the list?", func(ok bool) {
+		dialog.ShowConfirm(
+			lang.X("domains.clear.title", "Clear"),
+			lang.X("domains.clear.confirm", "Clear all domains in the list?"),
+			func(ok bool) {
 			if !ok {
 				return
 			}
@@ -811,7 +820,11 @@ func (u *UI) exclusionsPanel(stopCh <-chan struct{}) *fyne.Container {
 				clearBtn.Disable()
 			})
 
-			hideProgress := showInfiniteProgressDialog("Clearing", "Removing "+strconv.Itoa(len(snapshot))+" domains...", u.dashboardWindow)
+			hideProgress := showInfiniteProgressDialog(
+				lang.X("domains.clear.progress.title", "Clearing"),
+				lang.XN("domains.clear.progress", "Removing {{.Count}} domains...", len(snapshot), map[string]any{"Count": len(snapshot)}),
+				u.dashboardWindow,
+			)
 			go func() {
 				defer func() {
 					hideProgress()
@@ -857,13 +870,7 @@ func (u *UI) exclusionsPanel(stopCh <-chan struct{}) *fyne.Container {
 			fyne.Do(func() {
 				mode = newMode
 				exclusions = newExclusions
-				if modeRadio != nil {
-					if mode == commands.SiteExclusionModeGeneral {
-						modeRadio.SetSelected(optionGeneral)
-					} else {
-						modeRadio.SetSelected(optionSelective)
-					}
-				}
+				selectExclusionModeRadio()
 				refreshFiltered()
 				updateClearButtonState()
 			})
@@ -881,13 +888,7 @@ func (u *UI) exclusionsPanel(stopCh <-chan struct{}) *fyne.Container {
 			fyne.Do(func() {
 				mode = newMode
 				exclusions = newExclusions
-				if modeRadio != nil {
-					if mode == commands.SiteExclusionModeGeneral {
-						modeRadio.SetSelected(optionGeneral)
-					} else {
-						modeRadio.SetSelected(optionSelective)
-					}
-				}
+				selectExclusionModeRadio()
 				refreshFiltered()
 				updateClearButtonState()
 
@@ -948,7 +949,14 @@ func (u *UI) LocationSelector() {
 			return text
 		}
 
-		headers := []string{"", "ISO", "Country", "City", "Ping (ms)", "★"}
+		headers := []string{
+			"",
+			lang.X("location.header.iso", "ISO"),
+			lang.X("location.header.country", "Country"),
+			lang.X("location.header.city", "City"),
+			lang.X("location.header.ping", "Ping (ms)"),
+			"★",
+		}
 		text := headers[col]
 		if sortByColumn[col] == currentSortCol {
 			if ascending {
@@ -961,7 +969,7 @@ func (u *UI) LocationSelector() {
 	}
 
 	fyne.Do(func() {
-		window := u.Fyne.NewWindow("adgui: select location")
+		window := u.Fyne.NewWindow(lang.X("location.window_title", "adgui: select location"))
 		window.Resize(fyne.NewSize(700, 720))
 		u.locationWindow = window
 
@@ -970,7 +978,7 @@ func (u *UI) LocationSelector() {
 		})
 
 		filterEntry := widget.NewEntry()
-		filterEntry.SetPlaceHolder("Filter by city or country...")
+		filterEntry.SetPlaceHolder(lang.X("location.filter.placeholder", "Filter by city or country..."))
 		currentFilter := ""
 
 		applyBookmarkFlags := func(locs []locations.Location) []locations.Location {
