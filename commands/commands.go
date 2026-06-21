@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"sync"
 	"syscall"
@@ -62,12 +63,20 @@ type VPNManager struct {
 	onStatusChange func()
 	checkReqs      chan struct{}
 
-	// all below protected by mutex
+	// all below protected by statemx
 	statemx            sync.Mutex
 	status             string
 	location           string
+	connectedLocation  locations.Location
 	isConnected        bool
 	siteExclusionsMode SiteExclusionMode
+
+	// connection history (historyMx)
+	historyMx          sync.Mutex
+	history            []ConnectionHistoryEntry
+	activeConnection   *ConnectionHistoryEntry
+	locationsCache     []locations.Location
+	locationsCacheTime time.Time
 
 	// command queue tracking
 	queueMx       sync.Mutex
@@ -83,6 +92,11 @@ func New() *VPNManager {
 		runningCmds: make(map[uint64]*exec.Cmd),
 		cmdInfos:    make(map[uint64]RunningCommand),
 	}
+	if history, err := LoadConnectionHistory(); err != nil {
+		fmt.Printf("load connections history error: %v\n", err)
+	} else {
+		mgr.history = history
+	}
 	go mgr.statusCheckLoop()
 	return &mgr
 }
@@ -91,6 +105,43 @@ func (v *VPNManager) Location() string {
 	v.statemx.Lock()
 	defer v.statemx.Unlock()
 	return v.location
+}
+
+func (v *VPNManager) ConnectedLocation() (locations.Location, bool) {
+	v.statemx.Lock()
+	defer v.statemx.Unlock()
+	if !v.isConnected {
+		return locations.Location{}, false
+	}
+	return v.connectedLocation, true
+}
+
+func (v *VPNManager) ConnectionHistory() []ConnectionHistoryEntry {
+	v.historyMx.Lock()
+	defer v.historyMx.Unlock()
+
+	result := make([]ConnectionHistoryEntry, 0, len(v.history)+1)
+	if v.activeConnection != nil {
+		result = append(result, *v.activeConnection)
+	}
+	result = append(result, v.history...)
+	if len(result) > maxHistoryEntries {
+		result = result[:maxHistoryEntries]
+	}
+	return result
+}
+
+// PreviousConnectionHistory returns completed sessions only (excludes the active connection).
+func (v *VPNManager) PreviousConnectionHistory() []ConnectionHistoryEntry {
+	v.historyMx.Lock()
+	defer v.historyMx.Unlock()
+
+	result := make([]ConnectionHistoryEntry, len(v.history))
+	copy(result, v.history)
+	if len(result) > maxHistoryEntries {
+		result = result[:maxHistoryEntries]
+	}
+	return result
 }
 
 func (v *VPNManager) Status() string {
@@ -305,23 +356,153 @@ func (v *VPNManager) ListLocations() []locations.Location {
 	return actualLocations
 }
 
-func (v *VPNManager) ConnectToLocation(city string) {
-	output, err := v.executeCommand("connect", "-l", city)
+func (v *VPNManager) ConnectToLocation(loc locations.Location) {
+	output, err := v.executeCommand("connect", "-l", loc.City)
 	if err != nil {
 		fmt.Printf("Connect to location error: %v\nOutput: %s\n", err, output)
 		return
 	}
 
 	if strings.Contains(output, statusConnectedTo) {
-		v.statemx.Lock()
-		v.isConnected = true
-		v.location = city
-		callback := v.onStatusChange
-		v.statemx.Unlock()
-		if callback != nil {
-			callback()
-		}
+		v.applyConnected(loc)
 	}
+}
+
+func (v *VPNManager) applyConnected(loc locations.Location) {
+	v.statemx.Lock()
+	wasConnected := v.isConnected
+	prevLoc := v.connectedLocation
+	v.isConnected = true
+	v.location = loc.City
+	v.connectedLocation = loc
+	callback := v.onStatusChange
+	v.statemx.Unlock()
+
+	v.updateConnectionHistory(wasConnected, prevLoc, loc)
+
+	if callback != nil {
+		callback()
+	}
+}
+
+func (v *VPNManager) applyDisconnected() {
+	v.statemx.Lock()
+	wasConnected := v.isConnected
+	v.isConnected = false
+	v.location = ""
+	v.connectedLocation = locations.Location{}
+	callback := v.onStatusChange
+	v.statemx.Unlock()
+
+	if wasConnected {
+		v.finalizeActiveConnection()
+	}
+
+	if callback != nil {
+		callback()
+	}
+}
+
+func locationsEqual(a, b locations.Location) bool {
+	return strings.EqualFold(a.City, b.City) && strings.EqualFold(a.Country, b.Country)
+}
+
+func (v *VPNManager) updateConnectionHistory(wasConnected bool, prevLoc, newLoc locations.Location) {
+	v.historyMx.Lock()
+	defer v.historyMx.Unlock()
+
+	if wasConnected && !locationsEqual(prevLoc, newLoc) {
+		v.finalizeActiveConnectionLocked()
+		v.startActiveConnectionLocked(newLoc)
+		return
+	}
+	if !wasConnected {
+		v.startActiveConnectionLocked(newLoc)
+	}
+}
+
+func (v *VPNManager) startActiveConnectionLocked(loc locations.Location) {
+	now := time.Now()
+	entry := ConnectionHistoryEntry{
+		City:      loc.City,
+		Country:   loc.Country,
+		Ping:      loc.Ping,
+		StartedAt: now,
+	}
+	v.activeConnection = &entry
+}
+
+func (v *VPNManager) finalizeActiveConnection() {
+	v.historyMx.Lock()
+	defer v.historyMx.Unlock()
+	v.finalizeActiveConnectionLocked()
+}
+
+func (v *VPNManager) finalizeActiveConnectionLocked() {
+	if v.activeConnection == nil {
+		return
+	}
+	now := time.Now()
+	v.activeConnection.EndedAt = &now
+	v.history = prependHistoryEntry(v.history, *v.activeConnection)
+	if len(v.history) > maxHistoryEntries {
+		v.history = v.history[:maxHistoryEntries]
+	}
+	v.activeConnection = nil
+	if err := SaveConnectionHistory(v.history); err != nil {
+		fmt.Printf("save connections history error: %v\n", err)
+	}
+}
+
+func prependHistoryEntry(entries []ConnectionHistoryEntry, entry ConnectionHistoryEntry) []ConnectionHistoryEntry {
+	result := make([]ConnectionHistoryEntry, 0, len(entries)+1)
+	result = append(result, entry)
+	result = append(result, entries...)
+	return result
+}
+
+func (v *VPNManager) resolveLocation(cityName string) locations.Location {
+	if cityName == "" {
+		return locations.Location{}
+	}
+
+	v.statemx.Lock()
+	cached := v.locationsCache
+	cacheTime := v.locationsCacheTime
+	v.statemx.Unlock()
+
+	if len(cached) == 0 || time.Since(cacheTime) > 5*time.Minute {
+		cached = v.ListLocations()
+		v.statemx.Lock()
+		v.locationsCache = cached
+		v.locationsCacheTime = time.Now()
+		v.statemx.Unlock()
+	}
+
+	if found := locations.FindByCity(cached, cityName); found != nil {
+		return *found
+	}
+	return locations.Location{City: cityName, Ping: -1}
+}
+
+var ansiStripRegex = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+
+func (v *VPNManager) CLIVersion() string {
+	cmdPath := resolveCommandPath()
+	cmd := exec.Command(cmdPath, "--version")
+	var buf bytes.Buffer
+	cmd.Stdout = &buf
+	cmd.Stderr = &buf
+	if err := cmd.Run(); err != nil {
+		fmt.Printf("CLI version error: %v\nOutput: %s\n", err, buf.String())
+		return "unavailable"
+	}
+	output := ansiStripRegex.ReplaceAllString(buf.String(), "")
+	output = strings.TrimSpace(output)
+	if output == "" {
+		return "unavailable"
+	}
+	return output
 }
 
 func (v *VPNManager) Disconnect() {
@@ -332,14 +513,9 @@ func (v *VPNManager) Disconnect() {
 	}
 
 	v.statemx.Lock()
-	v.isConnected = false
-	v.location = ""
 	v.status = statusDisconnected
-	callback := v.onStatusChange
 	v.statemx.Unlock()
-	if callback != nil {
-		callback()
-	}
+	v.applyDisconnected()
 }
 
 func (v *VPNManager) License() string {
@@ -465,49 +641,12 @@ func (v *VPNManager) checkStatus() {
 
 	// Проверяем статус
 	if strings.Contains(output, statusDisconnected) {
-		v.statemx.Lock()
-		v.isConnected = false
-		v.location = ""
-		callback := v.onStatusChange
-		v.statemx.Unlock()
 		fmt.Printf("status check: disconnected\n")
-		if callback != nil {
-			callback()
-		}
+		v.applyDisconnected()
 	} else if strings.Contains(output, "Connected to") {
-		// Извлекаем название локации из статуса
-		lines := strings.SplitSeq(output, "\n")
-		for line := range lines {
-			if strings.Contains(line, "Connected to") {
-				// Извлекаем название локации между ANSI кодами
-				// Формат: "Connected to [1mLOCATION[0m in ..."
-				location := line
-				// Удаляем префикс до названия локации
-				prefix := "Connected to "
-				if idx := strings.Index(location, prefix); idx >= 0 {
-					location = location[idx+len(prefix):]
-				}
-				// Удаляем ANSI коды жирного шрифта
-				location = strings.ReplaceAll(location, "\x1b[1m", "")
-				location = strings.ReplaceAll(location, "\x1b[0m", "")
-				// Удаляем суффикс после названия локации
-				if idx := strings.Index(location, " in "); idx >= 0 {
-					location = location[:idx]
-				}
-				// Очищаем от пробелов
-				location = strings.TrimSpace(location)
-
-				v.statemx.Lock()
-				v.location = location
-				v.isConnected = true
-				callback := v.onStatusChange
-				v.statemx.Unlock()
-				fmt.Printf("status check: connected to %s\n", location)
-				if callback != nil {
-					callback()
-				}
-				break
-			}
-		}
+		locationName := ParseLocationFromStatus(output)
+		loc := v.resolveLocation(locationName)
+		fmt.Printf("status check: connected to %s\n", locationName)
+		v.applyConnected(loc)
 	}
 }

@@ -8,10 +8,11 @@ import (
 
 // Location представляет информацию о локации VPN
 type Location struct {
-	ISO     string
-	Country string
-	City    string
-	Ping    int
+	ISO        string
+	Country    string
+	City       string
+	Ping       int
+	Bookmarked bool
 }
 
 // SortColumn определяет столбец для сортировки
@@ -47,6 +48,34 @@ func SortLocations(locs []Location, column SortColumn, ascending bool) []Locatio
 			return less
 		}
 		return !less
+	})
+
+	return result
+}
+
+// ApplyBookmarkFlags returns a copy of locs with Bookmarked set from the lookup function.
+func ApplyBookmarkFlags(locs []Location, bookmarked func(Location) bool) []Location {
+	result := make([]Location, len(locs))
+	copy(result, locs)
+	for i := range result {
+		result[i].Bookmarked = bookmarked(result[i])
+	}
+	return result
+}
+
+// SortLocationsWithBookmarks sorts locations and optionally moves bookmarked entries first.
+// When bookmarksFirst is false, the result matches SortLocations.
+func SortLocationsWithBookmarks(locs []Location, column SortColumn, ascending bool, bookmarksFirst bool) []Location {
+	result := SortLocations(locs, column, ascending)
+	if !bookmarksFirst {
+		return result
+	}
+
+	sort.SliceStable(result, func(i, j int) bool {
+		if result[i].Bookmarked == result[j].Bookmarked {
+			return false
+		}
+		return result[i].Bookmarked
 	})
 
 	return result
@@ -151,6 +180,20 @@ func FilterLocations(locations []Location, query string) []Location {
 		}
 	}
 	return filtered
+}
+
+// FindByCity returns the first location whose city matches case-insensitively.
+func FindByCity(locs []Location, city string) *Location {
+	target := strings.TrimSpace(city)
+	if target == "" {
+		return nil
+	}
+	for i := range locs {
+		if strings.EqualFold(locs[i].City, target) {
+			return &locs[i]
+		}
+	}
+	return nil
 }
 
 // FindFastestLocation находит локацию с минимальным пингом

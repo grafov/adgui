@@ -16,6 +16,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/driver/desktop"
@@ -28,6 +29,18 @@ var (
 	DisconnectedColor = color.NRGBA{R: 128, G: 128, B: 128, A: 255} // Серый
 	ConnectedColor    = color.NRGBA{R: 0, G: 255, B: 0, A: 255}     // Зеленый
 	WarningColor      = color.NRGBA{R: 255, G: 255, B: 0, A: 255}   // Желтый
+	StarInactiveColor = color.NRGBA{R: 160, G: 160, B: 160, A: 255}
+	StarActiveColor   = color.NRGBA{R: 255, G: 193, B: 7, A: 255}
+)
+
+const (
+	locationColFlag    = 0
+	locationColISO     = 1
+	locationColCountry = 2
+	locationColCity    = 3
+	locationColPing    = 4
+	locationColStar    = 5
+	locationTableCols  = 6
 )
 
 const domainsTabIndex = 2
@@ -38,6 +51,7 @@ type (
 		Fyne       fyne.App
 		desk       desktop.App
 		updateReqs chan struct{}
+		appVersion string
 		// protected by mutex
 		traymx          sync.RWMutex
 		menu            *fyne.Menu
@@ -45,11 +59,11 @@ type (
 		domainsCount    int
 
 		// Dashboard window and widgets for live updates
-		dashboardmx          sync.RWMutex
-		dashboardWindow      fyne.Window
-		dashboardStatusLabel *widget.RichText
-		dashboardConnectBtn  *widget.Button
-		dashboardTabs        *container.AppTabs
+		dashboardmx              sync.RWMutex
+		dashboardWindow          fyne.Window
+		dashboardConnectBtn      *widget.Button
+		dashboardTabs            *container.AppTabs
+		dashboardConnectionsWids *connectionsPanelWidgets
 
 		// Command queue list reference for live updates
 		cmdQueuemx          sync.RWMutex
@@ -74,7 +88,7 @@ type (
 	}
 )
 
-func New(vpnmgr *commands.VPNManager) *UI {
+func New(vpnmgr *commands.VPNManager, appVersion string) *UI {
 	myApp := app.NewWithID("AdGuard VPN Client")
 	myApp.SetIcon(theme.DisconnectedIcon)
 	logic := withLogicIncluded{
@@ -86,6 +100,7 @@ func New(vpnmgr *commands.VPNManager) *UI {
 		Fyne:              myApp,
 		desk:              desk,
 		updateReqs:        make(chan struct{}, 1),
+		appVersion:        appVersion,
 		withLogicIncluded: logic,
 	}
 	if ok {
@@ -298,8 +313,8 @@ func (u *UI) updateDashboardButtons() {
 func (u *UI) updateDashboard() {
 	u.dashboardmx.RLock()
 	window := u.dashboardWindow
-	statusLabel := u.dashboardStatusLabel
 	connectBtn := u.dashboardConnectBtn
+	connWids := u.dashboardConnectionsWids
 	u.dashboardmx.RUnlock()
 
 	if window == nil {
@@ -307,20 +322,16 @@ func (u *UI) updateDashboard() {
 	}
 
 	fyne.Do(func() {
-		// Re-check if window is still valid by checking the struct field
-		// This is safe because we are in the main thread where SetOnClosed callbacks run
 		u.dashboardmx.RLock()
 		currentWindow := u.dashboardWindow
 		u.dashboardmx.RUnlock()
 
 		if currentWindow != window {
-			// Window was closed or replaced
 			return
 		}
 
-		if statusLabel != nil {
-			statusLabel.Segments = parseAnsi(u.vpnmgr.Status()).Segments
-			statusLabel.Refresh()
+		if connWids != nil {
+			u.refreshConnectionsPanel(connWids)
 		}
 		if connectBtn != nil {
 			u.updateDashboardButtons()
@@ -352,38 +363,8 @@ func (u *UI) Dashboard() string {
 	window.Resize(fyne.NewSize(800, 600))
 	u.dashboardWindow = window
 
-	// Status section
-	statusHeader := widget.NewLabel("Status")
-	statusHeader.TextStyle.Bold = true
-	statusLbl := parseAnsi(u.vpnmgr.Status())
-	u.dashboardStatusLabel = statusLbl
-
-	// Control buttons section
-	connectBtn := widget.NewButton("", func() {
-		go func() {
-			if u.vpnmgr.IsConnected() {
-				u.vpnmgr.Disconnect()
-			} else {
-				u.vpnmgr.ConnectAuto()
-			}
-		}()
-	})
-	u.dashboardConnectBtn = connectBtn
-	u.updateDashboardButtons()
-
-	connectToBtn := widget.NewButton("Connect To...", func() {
-		u.LocationSelector()
-	})
-
-	buttonContainer := container.NewHBox(connectBtn, connectToBtn)
-
-	// Connections page content
-	connectionsContent := container.NewVBox(
-		statusHeader,
-		statusLbl,
-		widget.NewSeparator(),
-		buttonContainer,
-	)
+	connectionsContent, connWids := u.connectionsPanel()
+	u.dashboardConnectionsWids = connWids
 
 	license := u.licensePanel()
 	u.startPasteWatcher()
@@ -392,6 +373,7 @@ func (u *UI) Dashboard() string {
 		container.NewTabItem("License", license),
 		container.NewTabItem("Domains", u.exclusionsPanel(u.pasteWatchStop)),
 		container.NewTabItem("Cmd queue", u.cmdQueuePanel()),
+		container.NewTabItem("About", u.aboutPanel(u.appVersion)),
 	)
 	u.dashboardTabs = tabs
 	tabs.SetTabLocation(container.TabLocationLeading)
@@ -935,18 +917,39 @@ func (u *UI) LocationSelector() {
 
 	var allLocations []locations.Location
 	var filteredLocations []locations.Location
+	bookmarks, err := commands.LoadLocationBookmarks()
+	if err != nil {
+		fmt.Printf("failed to load location bookmarks: %v\n", err)
+		bookmarks = nil
+	}
 
-	// Состояние сортировки
 	sortColumn := locations.SortByPing
 	sortAscending := true
+	bookmarksFirst := false
 
-	// Функция для получения заголовка с индикатором сортировки
-	getHeaderText := func(col int, currentSortCol locations.SortColumn, ascending bool) string {
-		headers := []string{"ISO", "Country", "City", "Ping (ms)"}
-		colToSort := []locations.SortColumn{locations.SortByISO, locations.SortByCountry, locations.SortByCity, locations.SortByPing}
+	sortByColumn := []locations.SortColumn{
+		locations.SortByISO,
+		locations.SortByISO,
+		locations.SortByCountry,
+		locations.SortByCity,
+		locations.SortByPing,
+	}
 
+	getHeaderText := func(col int, currentSortCol locations.SortColumn, ascending bool, favoritesFirst bool) string {
+		switch col {
+		case locationColFlag:
+			return ""
+		case locationColStar:
+			text := "★"
+			if favoritesFirst {
+				text += " ▲"
+			}
+			return text
+		}
+
+		headers := []string{"", "ISO", "Country", "City", "Ping (ms)", "★"}
 		text := headers[col]
-		if colToSort[col] == currentSortCol {
+		if sortByColumn[col] == currentSortCol {
 			if ascending {
 				text += " ▲"
 			} else {
@@ -958,7 +961,7 @@ func (u *UI) LocationSelector() {
 
 	fyne.Do(func() {
 		window := u.Fyne.NewWindow("adgui: select location")
-		window.Resize(fyne.NewSize(640, 720))
+		window.Resize(fyne.NewSize(700, 720))
 		u.locationWindow = window
 
 		window.SetCloseIntercept(func() {
@@ -968,71 +971,174 @@ func (u *UI) LocationSelector() {
 		filterEntry := widget.NewEntry()
 		filterEntry.SetPlaceHolder("Filter by city or country...")
 
-		var table = widget.NewTable(
+		applyBookmarkFlags := func(locs []locations.Location) []locations.Location {
+			set := commands.LocationBookmarkSet(bookmarks)
+			return locations.ApplyBookmarkFlags(locs, func(loc locations.Location) bool {
+				_, ok := set[commands.LocationBookmarkKey(loc.ISO, loc.Country, loc.City)]
+				return ok
+			})
+		}
+
+		var table *widget.Table
+		refreshTable := func() {
+			filteredLocations = locations.FilterLocations(allLocations, filterEntry.Text)
+			filteredLocations = applyBookmarkFlags(filteredLocations)
+			filteredLocations = locations.SortLocationsWithBookmarks(
+				filteredLocations,
+				sortColumn,
+				sortAscending,
+				bookmarksFirst,
+			)
+			table.Refresh()
+		}
+
+		toggleBookmark := func(loc locations.Location) {
+			key := commands.LocationBookmarkKey(loc.ISO, loc.Country, loc.City)
+			found := -1
+			for i, bookmark := range bookmarks {
+				if commands.LocationBookmarkKey(bookmark.ISO, bookmark.Country, bookmark.City) == key {
+					found = i
+					break
+				}
+			}
+			if found >= 0 {
+				bookmarks = append(bookmarks[:found], bookmarks[found+1:]...)
+			} else {
+				bookmarks = append(bookmarks, commands.LocationBookmark{
+					ISO:     loc.ISO,
+					Country: loc.Country,
+					City:    loc.City,
+				})
+			}
+			if saveErr := commands.SaveLocationBookmarks(bookmarks); saveErr != nil {
+				fmt.Printf("failed to save location bookmarks: %v\n", saveErr)
+			}
+			allLocations = applyBookmarkFlags(allLocations)
+		}
+
+		table = widget.NewTable(
 			func() (int, int) {
-				return len(filteredLocations) + 1, 4
+				return len(filteredLocations) + 1, locationTableCols
 			},
 			func() fyne.CanvasObject {
-				return widget.NewLabel("...")
+				flagImg := canvas.NewImageFromResource(nil)
+				flagImg.FillMode = canvas.ImageFillContain
+				flagImg.SetMinSize(fyne.NewSize(28, 18))
+				label := widget.NewLabel("")
+				star := canvas.NewText("☆", StarInactiveColor)
+				star.TextSize = 16
+				star.Alignment = fyne.TextAlignCenter
+				return container.NewStack(flagImg, label, star)
 			},
 			func(id widget.TableCellID, obj fyne.CanvasObject) {
-				label := obj.(*widget.Label)
+				box := obj.(*fyne.Container)
+				flagImg := box.Objects[0].(*canvas.Image)
+				label := box.Objects[1].(*widget.Label)
+				star := box.Objects[2].(*canvas.Text)
+
+				flagImg.Hide()
+				flagImg.Resource = nil
+				flagImg.Refresh()
+				label.Hide()
+				label.SetText("")
+				star.Hide()
+				star.Text = ""
+				label.TextStyle.Bold = false
+
 				if id.Row == 0 {
-					label.SetText(getHeaderText(id.Col, sortColumn, sortAscending))
+					label.Show()
 					label.TextStyle.Bold = true
+					label.SetText(getHeaderText(id.Col, sortColumn, sortAscending, bookmarksFirst))
+					label.Refresh()
 					return
 				}
 
 				loc := filteredLocations[id.Row-1]
 				switch id.Col {
-				case 0:
+				case locationColFlag:
+					if res := theme.FlagResource(loc.ISO); res != nil {
+						flagImg.Resource = res
+						flagImg.Show()
+						flagImg.Refresh()
+					} else {
+						label.Show()
+						label.SetText(loc.ISO)
+					}
+				case locationColISO:
+					label.Show()
 					label.SetText(loc.ISO)
-				case 1:
+				case locationColCountry:
+					label.Show()
 					label.SetText(loc.Country)
-				case 2:
+				case locationColCity:
+					label.Show()
 					label.SetText(loc.City)
-				case 3:
+				case locationColPing:
+					label.Show()
 					label.SetText(strconv.Itoa(loc.Ping))
+				case locationColStar:
+					star.Show()
+					if loc.Bookmarked {
+						star.Text = "★"
+						star.Color = StarActiveColor
+					} else {
+						star.Text = "☆"
+						star.Color = StarInactiveColor
+					}
+					star.Refresh()
 				}
-				label.TextStyle.Bold = false
+				box.Refresh()
 			},
 		)
 
-		table.SetColumnWidth(0, 60)
-		table.SetColumnWidth(1, 200)
-		table.SetColumnWidth(2, 200)
-		table.SetColumnWidth(3, 100)
+		table.SetColumnWidth(locationColFlag, 36)
+		table.SetColumnWidth(locationColISO, 60)
+		table.SetColumnWidth(locationColCountry, 180)
+		table.SetColumnWidth(locationColCity, 180)
+		table.SetColumnWidth(locationColPing, 90)
+		table.SetColumnWidth(locationColStar, 40)
 
 		table.OnSelected = func(id widget.TableCellID) {
 			if id.Row == 0 {
-				// Клик на заголовок - сортировка
-				colToSort := []locations.SortColumn{locations.SortByISO, locations.SortByCountry, locations.SortByCity, locations.SortByPing}
-				clickedColumn := colToSort[id.Col]
+				switch id.Col {
+				case locationColFlag:
+					table.UnselectAll()
+					return
+				case locationColStar:
+					bookmarksFirst = !bookmarksFirst
+					refreshTable()
+					table.UnselectAll()
+					return
+				}
 
+				clickedColumn := sortByColumn[id.Col]
 				if clickedColumn == sortColumn {
-					// Тот же столбец - переключаем направление
 					sortAscending = !sortAscending
 				} else {
-					// Другой столбец - сортировка по возрастанию
 					sortColumn = clickedColumn
 					sortAscending = true
 				}
 
-				filteredLocations = locations.SortLocations(filteredLocations, sortColumn, sortAscending)
+				refreshTable()
 				table.UnselectAll()
-				table.Refresh()
 				return
 			}
+
+			if id.Col == locationColStar {
+				toggleBookmark(filteredLocations[id.Row-1])
+				refreshTable()
+				table.UnselectAll()
+				return
+			}
+
 			selectedLocation := filteredLocations[id.Row-1]
 			fmt.Printf("Selected: %+v\n", selectedLocation)
-			go u.vpnmgr.ConnectToLocation(selectedLocation.City)
+			go u.vpnmgr.ConnectToLocation(selectedLocation)
 			window.Hide()
 		}
 
-		filterEntry.OnChanged = func(query string) {
-			filteredLocations = locations.FilterLocations(allLocations, query)
-			filteredLocations = locations.SortLocations(filteredLocations, sortColumn, sortAscending)
-			table.Refresh()
+		filterEntry.OnChanged = func(_ string) {
+			refreshTable()
 		}
 
 		content := container.NewBorder(filterEntry, nil, nil, nil, table)
@@ -1049,9 +1155,8 @@ func (u *UI) LocationSelector() {
 		go func() {
 			locs := u.vpnmgr.ListLocations()
 			fyne.Do(func() {
-				allLocations = locs
-				filteredLocations = locations.SortLocations(locs, sortColumn, sortAscending)
-				table.Refresh()
+				allLocations = applyBookmarkFlags(locs)
+				refreshTable()
 			})
 		}()
 	})

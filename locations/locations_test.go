@@ -215,6 +215,18 @@ You can connect to a location by running /opt/adguardvpn_cli/adguardvpn-cli conn
 })
 
 var _ = Describe("FindFastestLocation", func() {
+	Context("when finding location by city", func() {
+		It("matches city names case-insensitively", func() {
+			locs := []locations.Location{
+				{ISO: "DE", Country: "Germany", City: "Frankfurt", Ping: 37},
+			}
+			found := locations.FindByCity(locs, "FRANKFURT")
+			Expect(found).NotTo(BeNil())
+			Expect(found.Country).To(Equal("Germany"))
+			Expect(found.Ping).To(Equal(37))
+		})
+	})
+
 	Context("when finding the fastest location", func() {
 		It("should return the location with the lowest ping", func() {
 			testLocations := []locations.Location{
@@ -285,5 +297,64 @@ var _ = Describe("FilterLocations", func() {
 			filtered := locations.FilterLocations(testLocations, "")
 			Expect(filtered).To(HaveLen(4))
 		})
+	})
+})
+
+var _ = Describe("SortLocationsWithBookmarks", func() {
+	It("places bookmarked locations first while preserving ping order within groups", func() {
+		locs := []locations.Location{
+			{ISO: "US", Country: "United States", City: "New York", Ping: 121, Bookmarked: false},
+			{ISO: "LV", Country: "Latvia", City: "Riga", Ping: 29, Bookmarked: true},
+			{ISO: "DE", Country: "Germany", City: "Berlin", Ping: 53, Bookmarked: true},
+			{ISO: "DE", Country: "Germany", City: "Frankfurt", Ping: 37, Bookmarked: false},
+		}
+
+		sorted := locations.SortLocationsWithBookmarks(locs, locations.SortByPing, true, true)
+
+		Expect(sorted[0].City).To(Equal("Riga"))
+		Expect(sorted[1].City).To(Equal("Berlin"))
+		Expect(sorted[2].City).To(Equal("Frankfurt"))
+		Expect(sorted[3].City).To(Equal("New York"))
+	})
+
+	It("does not mutate the input slice", func() {
+		locs := []locations.Location{
+			{ISO: "LV", Country: "Latvia", City: "Riga", Ping: 29, Bookmarked: true},
+			{ISO: "US", Country: "United States", City: "New York", Ping: 121},
+		}
+		original := append([]locations.Location(nil), locs...)
+
+		_ = locations.SortLocationsWithBookmarks(locs, locations.SortByPing, true, true)
+
+		Expect(locs).To(Equal(original))
+	})
+
+	It("matches SortLocations when bookmarksFirst is disabled", func() {
+		locs := []locations.Location{
+			{ISO: "US", Country: "United States", City: "New York", Ping: 121, Bookmarked: true},
+			{ISO: "LV", Country: "Latvia", City: "Riga", Ping: 29, Bookmarked: false},
+		}
+
+		withBookmarks := locations.SortLocationsWithBookmarks(locs, locations.SortByPing, true, false)
+		plain := locations.SortLocations(locs, locations.SortByPing, true)
+
+		Expect(withBookmarks).To(Equal(plain))
+	})
+})
+
+var _ = Describe("ApplyBookmarkFlags", func() {
+	It("marks locations using the lookup function", func() {
+		locs := []locations.Location{
+			{ISO: "DE", Country: "Germany", City: "Frankfurt", Ping: 37},
+			{ISO: "LV", Country: "Latvia", City: "Riga", Ping: 29},
+		}
+
+		result := locations.ApplyBookmarkFlags(locs, func(loc locations.Location) bool {
+			return loc.City == "Riga"
+		})
+
+		Expect(result[0].Bookmarked).To(BeFalse())
+		Expect(result[1].Bookmarked).To(BeTrue())
+		Expect(locs[1].Bookmarked).To(BeFalse())
 	})
 })

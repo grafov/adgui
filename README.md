@@ -82,3 +82,13 @@ example.com
 subdomain.example.org
 another-site.net
 ```
+
+### Location Bookmarks (Connect To)
+
+The **Connect To...** location selector lets you bookmark VPN locations with the star column on the right. Bookmarked locations are saved to:
+
+- `~/.local/share/adgui/location-bookmarks` (or `$XDG_DATA_HOME/adgui/location-bookmarks`)
+
+Click the **★** column header to toggle sorting bookmarked locations first. Click a row star to add or remove a bookmark without connecting.
+
+Country flags in the location list use SVG assets from [lipis/flag-icons](https://github.com/lipis/flag-icons) (MIT license), embedded in the application binary.
