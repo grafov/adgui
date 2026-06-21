@@ -58,7 +58,7 @@ var _ = Describe("Exclusions Persistence and Helpers", func() {
 			err := commands.SaveExclusionsForMode(commands.SiteExclusionModeGeneral, input)
 			Expect(err).NotTo(HaveOccurred())
 
-			expectedDir := filepath.Join(tempHome, ".local", "share", "adgui", "site-exclusions")
+			expectedDir := filepath.Join(tempHome, ".config", "adgui", "site-exclusions")
 			Expect(expectedDir).To(BeADirectory())
 
 			expectedFile := filepath.Join(expectedDir, "general.txt")
@@ -78,12 +78,34 @@ var _ = Describe("Exclusions Persistence and Helpers", func() {
 			err := commands.SaveExclusionsForMode(commands.SiteExclusionModeSelective, input)
 			Expect(err).NotTo(HaveOccurred())
 
-			expectedFile := filepath.Join(tempHome, ".local", "share", "adgui", "site-exclusions", "selective.txt")
+			expectedFile := filepath.Join(tempHome, ".config", "adgui", "site-exclusions", "selective.txt")
 			Expect(expectedFile).To(BeAnExistingFile())
 
 			loaded, err := commands.LoadExclusionsForMode(commands.SiteExclusionModeSelective)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(loaded).To(Equal(input))
+		})
+
+		It("should migrate legacy general mode exclusions on first load", func() {
+			legacyDir := filepath.Join(tempHome, ".local", "share", "adgui", "site-exclusions")
+			err := os.MkdirAll(legacyDir, 0o755)
+			Expect(err).NotTo(HaveOccurred())
+
+			legacyFile := filepath.Join(legacyDir, "general.txt")
+			err = os.WriteFile(legacyFile, []byte("legacy.com\nExample.Com\n"), 0o644)
+			Expect(err).NotTo(HaveOccurred())
+
+			loaded, err := commands.LoadExclusionsForMode(commands.SiteExclusionModeGeneral)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(loaded).To(Equal([]string{"legacy.com", "Example.Com"}))
+
+			newFile := filepath.Join(tempHome, ".config", "adgui", "site-exclusions", "general.txt")
+			Expect(newFile).To(BeAnExistingFile())
+			Expect(legacyFile).To(BeAnExistingFile())
+
+			content, err := os.ReadFile(newFile)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(content)).To(Equal("legacy.com\nExample.Com\n"))
 		})
 	})
 })

@@ -26,8 +26,9 @@ import (
 )
 
 var (
-	DisconnectedColor = color.NRGBA{R: 128, G: 128, B: 128, A: 255} // Серый
-	ConnectedColor    = color.NRGBA{R: 0, G: 255, B: 0, A: 255}     // Зеленый
+	DisconnectedColor       = color.NRGBA{R: 128, G: 128, B: 128, A: 255} // Серый
+	DisconnectedStatusColor = color.NRGBA{R: 255, G: 0, B: 0, A: 255}     // Красный
+	ConnectedColor          = color.NRGBA{R: 0, G: 255, B: 0, A: 255}     // Зеленый
 	WarningColor      = color.NRGBA{R: 255, G: 255, B: 0, A: 255}   // Желтый
 	StarInactiveColor = color.NRGBA{R: 160, G: 160, B: 160, A: 255}
 	StarActiveColor   = color.NRGBA{R: 255, G: 193, B: 7, A: 255}

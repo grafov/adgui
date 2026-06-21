@@ -27,8 +27,8 @@ The Domains tab in the dashboard allows you to manage site exclusions for AdGuar
 
 #### Automatic Persistence
 The exclusion lists are separated by mode (General and Selective) and automatically persist to the following local files on any change (Add, Paste, Import, Remove, Clear):
-- General mode: `~/.local/share/adgui/site-exclusions/general.txt`
-- Selective mode: `~/.local/share/adgui/site-exclusions/selective.txt`
+- General mode: `~/.config/adgui/site-exclusions/general.txt`
+- Selective mode: `~/.config/adgui/site-exclusions/selective.txt`
 
 When you switch exclusion modes, the current active list is saved to its corresponding file, and the list for the new mode is automatically loaded and applied to the CLI.
 
@@ -71,7 +71,7 @@ If you have old unified plain-text exclusion files, you can migrate them to the 
 python3 scripts/migrate-site-exclusions.py --target-mode [general|selective]
 ```
 
-By default, the script scans the `~/.local/share/adgui/site-exclusions/` directory and merges all files (excluding `general.txt` and `selective.txt`) into the target mode file with automatic deduplication. You can also specify input files explicitly using the `--input <path>` flag.
+By default, the script scans the legacy `~/.local/share/adgui/site-exclusions/` directory and merges all files (excluding `general.txt` and `selective.txt`) into the target mode file at `~/.config/adgui/site-exclusions/` with automatic deduplication. You can also specify input files explicitly using the `--input <path>` flag.
 
 #### File Format
 

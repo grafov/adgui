@@ -10,10 +10,16 @@ import (
 )
 
 // GetExclusionsDirPath returns the absolute path to the directory where site exclusions
-// files are stored (~/.local/share/adgui/site-exclusions).
-// Detailed explanation: It reads the user home directory using os.UserHomeDir and joins
-// it with the standard path .local/share/adgui/site-exclusions.
+// files are stored (~/.config/adgui/site-exclusions).
 func GetExclusionsDirPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to get user home directory: %w", err)
+	}
+	return filepath.Join(home, ".config", "adgui", "site-exclusions"), nil
+}
+
+func getLegacyExclusionsDirPath() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("failed to get user home directory: %w", err)
@@ -22,8 +28,6 @@ func GetExclusionsDirPath() (string, error) {
 }
 
 // GetExclusionsFilePath returns the absolute path to the exclusions file for the given mode.
-// Detailed explanation: It resolves the base directory path first, then appends the file name
-// matching the mode ("general.txt" or "selective.txt").
 func GetExclusionsFilePath(mode SiteExclusionMode) (string, error) {
 	dir, err := GetExclusionsDirPath()
 	if err != nil {
@@ -36,15 +40,19 @@ func GetExclusionsFilePath(mode SiteExclusionMode) (string, error) {
 	return filepath.Join(dir, filename), nil
 }
 
-// LoadExclusionsForMode reads the saved exclusions for the specified mode from the local filesystem.
-// Detailed explanation: It reads the file line by line, trims each domain, ignores empty lines,
-// and returns a normalized slice of domains. If the file does not exist, it returns an empty slice and no error.
-func LoadExclusionsForMode(mode SiteExclusionMode) ([]string, error) {
-	path, err := GetExclusionsFilePath(mode)
+func getLegacyExclusionsFilePath(mode SiteExclusionMode) (string, error) {
+	dir, err := getLegacyExclusionsDirPath()
 	if err != nil {
-		return nil, err
+		return "", err
 	}
+	filename := "general.txt"
+	if mode == SiteExclusionModeSelective {
+		filename = "selective.txt"
+	}
+	return filepath.Join(dir, filename), nil
+}
 
+func readExclusionsFromFile(path string) ([]string, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -72,9 +80,44 @@ func LoadExclusionsForMode(mode SiteExclusionMode) ([]string, error) {
 	return NormalizeDomains(domains), nil
 }
 
+// LoadExclusionsForMode reads the saved exclusions for the specified mode from the local filesystem.
+// If the new config file does not exist, it falls back to the legacy data directory and migrates
+// the list to the new location without deleting the old file.
+func LoadExclusionsForMode(mode SiteExclusionMode) ([]string, error) {
+	path, err := GetExclusionsFilePath(mode)
+	if err != nil {
+		return nil, err
+	}
+
+	domains, err := readExclusionsFromFile(path)
+	if err != nil {
+		return nil, err
+	}
+	if domains != nil {
+		return domains, nil
+	}
+
+	legacyPath, err := getLegacyExclusionsFilePath(mode)
+	if err != nil {
+		return nil, err
+	}
+
+	legacyDomains, err := readExclusionsFromFile(legacyPath)
+	if err != nil {
+		return nil, err
+	}
+	if legacyDomains == nil {
+		return nil, nil
+	}
+
+	if err := SaveExclusionsForMode(mode, legacyDomains); err != nil {
+		return nil, err
+	}
+
+	return legacyDomains, nil
+}
+
 // SaveExclusionsForMode writes the list of domains for the specified mode to the local filesystem.
-// Detailed explanation: It normalizes the domains first, ensures that the directory exists,
-// and then overwrites the mode-specific file with the domain list, one domain per line.
 func SaveExclusionsForMode(mode SiteExclusionMode, domains []string) error {
 	path, err := GetExclusionsFilePath(mode)
 	if err != nil {
@@ -112,8 +155,6 @@ func SaveExclusionsForMode(mode SiteExclusionMode, domains []string) error {
 
 // NormalizeDomains normalizes the domain list by trimming spaces, removing empty lines,
 // and deduplicating them in a case-insensitive manner while preserving the case of the first occurrence.
-// Detailed explanation: It processes the input slice of domains, trims whitespace, skips empty strings,
-// and filters duplicates case-insensitively using a map of lowercase domains.
 func NormalizeDomains(domains []string) []string {
 	seen := make(map[string]bool)
 	var result []string

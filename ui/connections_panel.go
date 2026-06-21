@@ -16,7 +16,7 @@ type connectionsPanelWidgets struct {
 	cityLabel      *canvas.Text
 	countryLabel   *canvas.Text
 	pingLabel      *canvas.Text
-	statusLabel    *widget.Label
+	statusLabel    *canvas.Text
 	historyBox     *fyne.Container
 	historySection *fyne.Container
 }
@@ -26,16 +26,17 @@ func (u *UI) connectionsPanel() (*fyne.Container, *connectionsPanelWidgets) {
 		cityLabel:    canvas.NewText("", ConnectedColor),
 		countryLabel: canvas.NewText("", ConnectedColor),
 		pingLabel:    canvas.NewText("", ConnectedColor),
-		statusLabel:  widget.NewLabel("Disconnected"),
+		statusLabel:  canvas.NewText("Disconnected", DisconnectedStatusColor),
 		historyBox:   container.NewVBox(),
 	}
+	widgets.statusLabel.TextSize = 36
+	widgets.statusLabel.Alignment = fyne.TextAlignCenter
 	widgets.cityLabel.TextSize = 36
 	widgets.cityLabel.Alignment = fyne.TextAlignCenter
 	widgets.countryLabel.TextSize = 24
 	widgets.countryLabel.Alignment = fyne.TextAlignCenter
 	widgets.pingLabel.TextSize = 28
 	widgets.pingLabel.Alignment = fyne.TextAlignCenter
-	widgets.statusLabel.Alignment = fyne.TextAlignCenter
 
 	connectBtn := widget.NewButton("", func() {
 		go func() {
@@ -55,7 +56,7 @@ func (u *UI) connectionsPanel() (*fyne.Container, *connectionsPanelWidgets) {
 	buttonContainer := container.NewHBox(layout.NewSpacer(), connectBtn, connectToBtn, layout.NewSpacer())
 
 	centerContent := container.NewVBox(
-		widgets.statusLabel,
+		container.NewCenter(widgets.statusLabel),
 		container.NewCenter(widgets.cityLabel),
 		container.NewCenter(widgets.countryLabel),
 		container.NewCenter(widgets.pingLabel),
@@ -94,7 +95,7 @@ func (u *UI) refreshConnectionsPanel(w *connectionsPanelWidgets) {
 		if !ok {
 			loc.City = u.vpnmgr.Location()
 		}
-		w.statusLabel.SetText("")
+		w.statusLabel.Text = ""
 		w.cityLabel.Text = loc.City
 		w.countryLabel.Text = loc.Country
 		w.pingLabel.Text = formatPing(loc.Ping)
@@ -102,7 +103,8 @@ func (u *UI) refreshConnectionsPanel(w *connectionsPanelWidgets) {
 		w.countryLabel.Color = ConnectedColor
 		w.pingLabel.Color = ConnectedColor
 	} else {
-		w.statusLabel.SetText("Disconnected")
+		w.statusLabel.Text = "Disconnected"
+		w.statusLabel.Color = DisconnectedStatusColor
 		w.cityLabel.Text = ""
 		w.countryLabel.Text = ""
 		w.pingLabel.Text = ""

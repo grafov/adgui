@@ -45,34 +45,35 @@ def main():
     parser.add_argument(
         "--input",
         action="append",
-        help="Path to an old exclusions list file. Can be specified multiple times. If omitted, all files in the exclusions directory (except general.txt and selective.txt) will be scanned."
+        help="Path to an old exclusions list file. Can be specified multiple times. If omitted, all files in the legacy exclusions directory (except general.txt and selective.txt) will be scanned."
     )
     
     args = parser.parse_args()
     
-    default_dir = os.path.expanduser("~/.local/share/adgui/site-exclusions")
+    legacy_dir = os.path.expanduser("~/.local/share/adgui/site-exclusions")
+    target_dir = os.path.expanduser("~/.config/adgui/site-exclusions")
     target_filename = f"{args.target_mode}.txt"
-    target_path = os.path.join(default_dir, target_filename)
+    target_path = os.path.join(target_dir, target_filename)
     
     input_files = []
     if args.input:
         for f in args.input:
             input_files.append(os.path.abspath(f))
     else:
-        # Scan directory
-        if not os.path.isdir(default_dir):
-            print(f"Directory {default_dir} does not exist. No files to auto-scan.", file=sys.stderr)
+        # Scan legacy directory
+        if not os.path.isdir(legacy_dir):
+            print(f"Directory {legacy_dir} does not exist. No files to auto-scan.", file=sys.stderr)
             sys.exit(0)
             
         ignore_files = {"general.txt", "selective.txt"}
         try:
-            entries = sorted(os.listdir(default_dir))
+            entries = sorted(os.listdir(legacy_dir))
             for entry in entries:
-                entry_path = os.path.join(default_dir, entry)
+                entry_path = os.path.join(legacy_dir, entry)
                 if os.path.isfile(entry_path) and entry not in ignore_files:
                     input_files.append(entry_path)
         except OSError as e:
-            print(f"Error reading directory {default_dir}: {e}", file=sys.stderr)
+            print(f"Error reading directory {legacy_dir}: {e}", file=sys.stderr)
             sys.exit(1)
             
     if not input_files:
@@ -118,9 +119,9 @@ def main():
     
     # Ensure target directory exists
     try:
-        os.makedirs(os.path.dirname(target_path), exist_ok=True)
+        os.makedirs(target_dir, exist_ok=True)
     except OSError as e:
-        print(f"Failed to create directory {os.path.dirname(target_path)}: {e}", file=sys.stderr)
+        print(f"Failed to create directory {target_dir}: {e}", file=sys.stderr)
         sys.exit(1)
         
     # Write to target file
