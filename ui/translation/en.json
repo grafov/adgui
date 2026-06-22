@@ -92,5 +92,7 @@
     "ip_region.col.service": "Service",
     "ip_region.col.ipv4": "IPv4",
     "ip_region.col.ipv6": "IPv6",
-    "ip_region.same_as_ipv4": "—"
+    "ip_region.same_as_ipv4": "—",
+    "ip_region.cache.cached_data": "cached data, checked at {{.Time}}",
+    "ip_region.cache.checked_at": "checked at {{.Time}}"
 }

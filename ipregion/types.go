@@ -53,19 +53,28 @@ type Progress struct {
 
 // ServiceResult is one row in the scan report.
 type ServiceResult struct {
-	Group   Group
-	Service string
-	IPv4    string
-	IPv6    string
+	Group   Group  `json:"group"`
+	Service string `json:"service"`
+	IPv4    string `json:"ipv4"`
+	IPv6    string `json:"ipv6"`
 }
 
 // Report is the full scan output.
 type Report struct {
-	ExternalIPv4 string
-	ExternalIPv6 string
-	ASN          string
-	ASNOrg       string
-	Results      []ServiceResult
+	ExternalIPv4 string          `json:"external_ipv4"`
+	ExternalIPv6 string          `json:"external_ipv6"`
+	ASN          string          `json:"asn"`
+	ASNOrg       string          `json:"asn_org"`
+	Results      []ServiceResult `json:"results"`
+}
+
+// CachedReport is a persisted scan result with metadata for the Region IP cache.
+type CachedReport struct {
+	CheckedAt time.Time `json:"checked_at"`
+	VPNOff    bool      `json:"vpn_off"`
+	ISO       string    `json:"iso,omitempty"`
+	Location  string    `json:"location,omitempty"`
+	Report    Report    `json:"report"`
 }
 
 // CountryStat is one entry in the summary histogram.

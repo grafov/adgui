@@ -98,5 +98,7 @@
     "ip_region.col.service": "Сервис",
     "ip_region.col.ipv4": "IPv4",
     "ip_region.col.ipv6": "IPv6",
-    "ip_region.same_as_ipv4": "—"
+    "ip_region.same_as_ipv4": "—",
+    "ip_region.cache.cached_data": "кешированные данные, проверено {{.Time}}",
+    "ip_region.cache.checked_at": "проверено {{.Time}}"
 }

@@ -112,7 +112,7 @@ Primary probes query GeoIP APIs (MaxMind, ipinfo.io, Cloudflare, ip-api.com, and
 
 #### Optional API Keys
 
-Some services accept your own API keys. Create `~/.config/adgui/service-keys` (INI format) with any of:
+Some services for checking of region accept your own API keys. Create `~/.config/adgui/service-keys` (INI format) with any of:
 
 ```ini
 IPREGISTRY_KEY=your_key
@@ -123,3 +123,11 @@ AIRPORT_CODES_AUTH=your_token
 ```
 
 If the file or a key is missing, built-in demo defaults are used where available; other services work without keys.
+
+## AI code
+
+I actively use LLMs for generating large parts of code, tests, code review, localization and documentation for this project. It was an experiment to create a GUI (using the Fyne framework) in Go with LLMs. Mostly successful, though I needed to fix some parts manually. All the code reviewed by me.
+
+## License
+
+Under terms of GPL v3.

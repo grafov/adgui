@@ -121,5 +121,7 @@
     "ip_region.col.service": "Servo",
     "ip_region.col.ipv4": "IPv4",
     "ip_region.col.ipv6": "IPv6",
-    "ip_region.same_as_ipv4": "—"
+    "ip_region.same_as_ipv4": "—",
+    "ip_region.cache.cached_data": "kaŝmemoritaj datumoj, kontrolita je {{.Time}}",
+    "ip_region.cache.checked_at": "kontrolita je {{.Time}}"
 }

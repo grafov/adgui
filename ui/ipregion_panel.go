@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"adgui/config"
 	"adgui/ipregion"
@@ -19,6 +20,7 @@ func (u *UI) ipRegionPanel() *fyne.Container {
 	var showIPv6 bool
 	var scanning bool
 	var scanCancel context.CancelFunc
+	var displayedKey string
 
 	header := widget.NewLabel(lang.X("ip_region.header", "Check how services on the network see your IP"))
 	header.Wrapping = fyne.TextWrapWord
@@ -35,6 +37,9 @@ func (u *UI) ipRegionPanel() *fyne.Container {
 
 	progressArea := container.NewStack(progressBar, progressLabel)
 	progressArea.Hide()
+
+	cacheLabel := widget.NewLabel("")
+	cacheLabel.Hide()
 
 	vpnLabel := widget.NewLabel("")
 
@@ -171,13 +176,76 @@ func (u *UI) ipRegionPanel() *fyne.Container {
 		summaryRowsBox.Refresh()
 	}
 
-	applyReport := func(report *ipregion.Report) {
+	setCacheLabel := func(checkedAt time.Time, fromCache bool) {
+		timeText := checkedAt.Local().Format("2006-01-02 15:04:05")
+		if fromCache {
+			cacheLabel.SetText(lang.X("ip_region.cache.cached_data", "cached data, checked at {{.Time}}", map[string]any{
+				"Time": timeText,
+			}))
+		} else {
+			cacheLabel.SetText(lang.X("ip_region.cache.checked_at", "checked at {{.Time}}", map[string]any{
+				"Time": timeText,
+			}))
+		}
+		cacheLabel.Show()
+	}
+
+	clearDisplay := func() {
+		rows = nil
+		showIPv6 = false
+		refreshIPv6Columns()
+		cacheLabel.Hide()
+		vpnLabel.SetText("")
+		summaryTitle.Hide()
+		summaryTableHeader.Hide()
+		summaryRowsBox.Objects = nil
+		summaryRowsBox.Hide()
+		summaryEmpty.Hide()
+		list.Refresh()
+	}
+
+	applyCachedEntry := func(entry *ipregion.CachedReport, fromCache bool) {
+		if entry == nil {
+			return
+		}
+		report := &entry.Report
 		showIPv6 = report.ExternalIPv6 != ""
 		rows = report.Results
 		refreshIPv6Columns()
+		setCacheLabel(entry.CheckedAt, fromCache)
 		vpnLabel.SetText(buildVPNCompareLine(u, report))
 		refreshSummary(report)
 		list.Refresh()
+	}
+
+	currentCacheKey := func() string {
+		loc, connected := u.vpnmgr.ConnectedLocation()
+		return ipregion.CacheKeyForState(loc, connected)
+	}
+
+	refreshFromCache := func() {
+		if scanning {
+			return
+		}
+		key := currentCacheKey()
+		loc, connected := u.vpnmgr.ConnectedLocation()
+		entry, err := ipregion.LoadCacheForState(loc, connected)
+		if err != nil {
+			fmt.Printf("load region-ip cache error: %v\n", err)
+			return
+		}
+		if entry == nil {
+			if displayedKey != "" {
+				clearDisplay()
+				displayedKey = ""
+			}
+			return
+		}
+		if key == displayedKey {
+			return
+		}
+		applyCachedEntry(entry, true)
+		displayedKey = key
 	}
 
 	startScan := func() {
@@ -186,11 +254,13 @@ func (u *UI) ipRegionPanel() *fyne.Container {
 		}
 		scanning = true
 		rows = nil
+		displayedKey = ""
 		summaryTitle.Hide()
 		summaryTableHeader.Hide()
 		summaryRowsBox.Objects = nil
 		summaryRowsBox.Hide()
 		summaryEmpty.Hide()
+		cacheLabel.Hide()
 		list.Refresh()
 		actionBtn.SetText(lang.X("ip_region.cancel", "Cancel"))
 		showProgress()
@@ -229,7 +299,22 @@ func (u *UI) ipRegionPanel() *fyne.Container {
 				}
 
 				if report != nil && !cancelled {
-					applyReport(report)
+					checkedAt := time.Now()
+					loc, connected := u.vpnmgr.ConnectedLocation()
+					if saveErr := ipregion.SaveCacheForState(loc, connected, report, checkedAt); saveErr != nil {
+						fmt.Printf("save region-ip cache error: %v\n", saveErr)
+					}
+					entry := &ipregion.CachedReport{
+						CheckedAt: checkedAt,
+						VPNOff:    !connected,
+						Report:    *report,
+					}
+					if connected {
+						entry.ISO = loc.ISO
+						entry.Location = loc.City
+					}
+					applyCachedEntry(entry, false)
+					displayedKey = ipregion.CacheKeyForState(loc, connected)
 				}
 				resetScanUI(actionBtn, &scanning)
 				scanCancel = nil
@@ -263,12 +348,16 @@ func (u *UI) ipRegionPanel() *fyne.Container {
 		header,
 		actionBtn,
 		progressArea,
+		cacheLabel,
 		vpnLabel,
 		summarySection,
 		widget.NewSeparator(),
 		servicesTitle,
 		tableHeader,
 	)
+
+	u.setIPRegionRefreshFunc(refreshFromCache)
+	refreshFromCache()
 
 	return container.NewBorder(top, nil, nil, nil, list)
 }

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"adgui/commands"
+	"adgui/ipregion"
 	"adgui/locations"
 	"adgui/theme"
 
@@ -70,6 +71,10 @@ type (
 		// Command queue list reference for live updates
 		cmdQueuemx          sync.RWMutex
 		cmdQueueRefreshFunc func()
+
+		// IP Region panel refresh on VPN status changes
+		ipRegionmx          sync.RWMutex
+		ipRegionRefreshFunc func()
 
 		// Location selector window
 		locationmx     sync.RWMutex
@@ -344,7 +349,32 @@ func (u *UI) updateDashboard() {
 		if refresh != nil {
 			refresh()
 		}
+
+		u.ipRegionmx.RLock()
+		ipRefresh := u.ipRegionRefreshFunc
+		u.ipRegionmx.RUnlock()
+		if ipRefresh != nil {
+			ipRefresh()
+		}
 	})
+}
+
+func (u *UI) setIPRegionRefreshFunc(fn func()) {
+	u.ipRegionmx.Lock()
+	u.ipRegionRefreshFunc = fn
+	u.ipRegionmx.Unlock()
+}
+
+func (u *UI) clearIPRegionCache() {
+	if err := ipregion.ClearCache(); err != nil {
+		fmt.Printf("clear region-ip cache error: %v\n", err)
+	}
+	u.ipRegionmx.RLock()
+	refresh := u.ipRegionRefreshFunc
+	u.ipRegionmx.RUnlock()
+	if refresh != nil {
+		refresh()
+	}
 }
 
 func (u *UI) Dashboard() string {
@@ -685,6 +715,7 @@ func (u *UI) exclusionsPanel(stopCh <-chan struct{}) *fyne.Container {
 			case u.updateReqs <- struct{}{}:
 			default:
 			}
+			u.clearIPRegionCache()
 			reloadExclusions()
 		}()
 	}
@@ -895,6 +926,8 @@ func (u *UI) exclusionsPanel(stopCh <-chan struct{}) *fyne.Container {
 
 				if err := commands.SaveExclusionsForMode(mode, exclusions); err != nil {
 					fmt.Printf("failed to auto-save exclusions for mode %s: %v\n", mode, err)
+				} else {
+					u.clearIPRegionCache()
 				}
 			})
 		}()
