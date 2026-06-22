@@ -1,0 +1,39 @@
+2026-06-22  Alexander I.Grafov  <grafov@inet.name>
+
+	Version 0.2.0
+
+	* ui/ipregion_panel.go: added IP Region dashboard tab to check how GeoIP
+	  databases and popular web services classify the current egress IP (IPv4
+	  and IPv6); scan runs on demand via Where am I? with progress and cancel.
+	* ui/ipregion_panel.go: when VPN is connected, compare selected location
+	  with external checks; mismatches are marked with ! in the services table.
+	* ipregion/: ported region-detection logic from Davoyan/ipregion (MIT);
+	  optional API keys in ~/.config/adgui/service-keys (INI).
+	* ipregion/cache.go: cache scan results under XDG cache (~/.cache/adgui)
+	  per VPN state and location; show cache age on the tab and reuse on open.
+
+2026-06-21  Alexander I.Grafov  <grafov@inet.name>
+
+	Version 0.1.0
+
+	* ui/i18n.go: interface localization via Fyne i18n; English, Russian,
+	  and Esperanto; language follows system locale with English fallback.
+	* commands/exclusions_persistence.go: site exclusion lists persist
+	  automatically to ~/.config/adgui/site-exclusions/ (general.txt and
+	  selective.txt) on any change; legacy ~/.local/share paths still load.
+	* ui/connections_panel.go: Connect To location bookmarks with star column
+	  and sort-by-bookmarks; stored in ~/.config/adgui/bookmarks with stale
+	  entry pruning.
+	* commands/connections_history.go: connection history for recent VPN
+	  locations.
+	* ui/about_panel.go: About tab with adgui and adguardvpn-cli version info.
+	* ui/ui.go: import and export of domain lists via native system file
+	  dialogs (.adgui plain-text format).
+	* theme/flags.go: country flags in the location list (lipis/flag-icons,
+	  MIT, embedded).
+	* ui/command_queue.go: dashboard tab to inspect and kill stuck
+	  adguardvpn-cli processes.
+	* commands/commands.go: site exclusions tab (General and Selective modes),
+	  domain filter, append, remove, clear, paste URLs as domain rules.
+	* ui/ui.go: tray menu quick access to exclusion mode and domain lists;
+	  read ~/.config/adgui/config on startup.
