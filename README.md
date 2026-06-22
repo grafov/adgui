@@ -3,10 +3,14 @@
 Simple GUI to control the CLI for AdGuard VPN on Linux desktop (X11 or Wayland).
 AdGuard officially offers GUIs for Mac, Android, and Windows, but Linux is missing one :(
 
-Technically the GUI is just a wrapper around the `adguardvpn-cli` utility on
-Linux. The GUI closely resembles the features offered by AdGuard VPN on Linux.
-Sadly, the Linux version of AdGuard VPN has fewer features than its counterparts
-on Mac/Windows.
+> The project doesn't offer VPN functionality. This is just a helper UI that wraps
+> the real VPN application (`adguardvpn-cli`) for more comfortable use in a
+> desktop environment. The project has no relation to Adguard or any of their
+> products.
+
+The GUI closely resembles the features offered by AdGuard VPN on Linux. Sadly,
+the Linux version of AdGuard VPN has fewer features than its counterparts on
+Mac/Windows.
 
 Work in progress but the application is fully functional.
 
@@ -34,6 +38,10 @@ Or use `PREFIX` for installing to another directory, for example under home:
 ## Features
 
 Fistly login to your Adguard account with `adguardvpn-cli`. I missed this part in GUI for simplicity, because you need it only once.
+
+### Tray support
+
+The set of actions available in application tray icon: show dashboard, connect to a location, connect to previous location, site-exclusions configuration, disconnect VPN.
 
 ### Site Exclusions (Domains Tab)
 
