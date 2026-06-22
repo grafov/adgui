@@ -1,12 +1,7 @@
-##
-# Project Title
-#
-# @file
-# @version 0.1
+# POSIX sh avoids per-$(shell) startup cost from an inherited user SHELL (e.g. fish)
+# and matches recipe shells unless a target overrides SHELL.
+SHELL := /bin/sh
 
-# Go Makefile
-
-# Variables
 APP=adgui
 BINDIR=build
 GOBUILD=go build
@@ -34,12 +29,14 @@ build:
 
 .PHONY: release-wayland
 release-wayland: # default build for Wayland (broken yet)
+	# BUG: Currently I have problems with Fyne on Wayland. Need more research.
+	#
 	# go tool fyne build -o build/adgui-wayland --release --tags wayland ./cmd/adgui
 	go tool fyne build -o build/adgui-wayland --release --tags x11 ./cmd/adgui
 
-.PHONY: release-x11
-release-x11: # build for X11/XLibre
-	go tool fyne build -o build/adgui-x11 --release --tags x11 ./cmd/adgui
+.PHONY: release-xlibre
+release-xlibre: # build for X11/XLibre
+	go tool fyne build -o build/adgui-xlibre --release --tags x11 ./cmd/adgui
 
 .PHONY: test
 test:
@@ -75,14 +72,14 @@ tidy:
 
 # Build under regular user, only install under root!
 .PHONY: install
-install: release-x11 release-wayland
+install: release-xlibre release-wayland
 	@echo "Don't forget to set SUDO=sudo (or SUDO=doas) before this command!"
 	@echo "for example: SUDO=doas make install"
-	$(SUDO) install ./build/adgui-x11 $(PREFIX)
+	$(SUDO) install ./build/adgui-xlibre $(PREFIX)
 	$(SUDO) install ./build/adgui-wayland $(PREFIX)
 	$(SUDO) install ./adgui-run $(PREFIX)
 
-deploy: release-wayland release-x11
+deploy: release-wayland release-xlibre
 	go tool fyne package --target linux --exe build/adgui-wayland --icon ./res/Icon.png --release --tags wayland
 
 .PHONY: sloc

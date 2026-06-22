@@ -1,6 +1,6 @@
 # AdGUI for the Adguard VPN
 
-Simple GUI to control the CLI for AdGuard VPN on Linux desktop (X11 or Wayland).
+Simple GUI to control the CLI for AdGuard VPN on Linux desktop (XLibre/X11 or Wayland).
 AdGuard officially offers GUIs for Mac, Android, and Windows, but Linux is missing one :(
 
 > The project doesn't offer VPN functionality. This is just a helper UI that wraps

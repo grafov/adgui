@@ -5,7 +5,7 @@ pid=$(ps x | grep -E '/usr/local/bin/adgui-(wayland|x11)$' | awk '{print $1}')
 kill $pid 2>/dev/null
 
 # Run binary for X11/XLibre by default.
-binary=adgui-x11
+binary=adgui-xlibre
 if [[ -n "$WAYLAND_DISPLAY" || "$XDG_SESSION_TYPE" == "wayland" ]]; then
     # I guess Wayland session is active.
     binary=adgui-wayland
