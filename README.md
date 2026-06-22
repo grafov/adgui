@@ -151,6 +151,10 @@ If the file or a key is missing, built-in demo defaults are used where available
 
 I actively use LLMs for generating large parts of code, tests, code review, localization and documentation for this project. It was an experiment to create a GUI (using the Fyne framework) in Go with LLMs. Mostly successful, though I needed to fix some parts manually. All the code reviewed by me.
 
+## Starware
+
+This software is a starware :) If you find the code useful, don’t forget to vote for this repo with a star! ⭐
+
 ## License
 
 Under terms of GPL v3.
