@@ -1,6 +1,14 @@
-# adgui
+# AdGUI for the Adguard VPN
 
-Simple GUI for control CLI for AdGuard VPN. Linux XLibre/Wayland.
+Simple GUI to control the CLI for AdGuard VPN on Linux desktop (X11 or Wayland).
+AdGuard officially offers GUIs for Mac, Android, and Windows, but Linux is missing one :(
+
+Technically the GUI is just a wrapper around the `adguardvpn-cli` utility on
+Linux. The GUI closely resembles the features offered by AdGuard VPN on Linux.
+Sadly, the Linux version of AdGuard VPN has fewer features than its counterparts
+on Mac/Windows.
+
+Work in progress but the application is fully functional.
 
 ![connection info](doc/scr2.png)
 
@@ -13,8 +21,9 @@ Other languages could be added later.
 
 ## Installation
 
-It tries to install into protected directory `/usr/local/bin` that requires root privileges.
-Use "sudo", "doas" or other appropriate command with SUDO environvent dir:
+No binaries provided at the moment. You should need to have Golang development environment on your machine.
+
+It tries to install into protected directory `/usr/local/bin` that requires root privileges. Use "sudo", "doas" or other appropriate command with SUDO environvent dir:
 
 `SUDO=sudo make install`
 
@@ -23,6 +32,8 @@ Or use `PREFIX` for installing to another directory, for example under home:
 `PREFIX=~/bin make install`
 
 ## Features
+
+Fistly login to your Adguard account with `adguardvpn-cli`. I missed this part in GUI for simplicity, because you need it only once.
 
 ### Site Exclusions (Domains Tab)
 
