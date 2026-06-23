@@ -23,7 +23,7 @@ import (
 )
 
 func (u *UI) aboutPanel(appVersion string) *fyne.Container {
-	adguiLabel := widget.NewLabel("adgui: " + appVersion)
+	adguiLabel := widget.NewLabel("adgui: " + appVersion + " GPL v3")
 	cliLabel := widget.NewLabel(lang.X("about.cli.loading", "adguardvpn-cli: loading..."))
 
 	go func() {
@@ -36,10 +36,14 @@ func (u *UI) aboutPanel(appVersion string) *fyne.Container {
 	header := widget.NewLabel(lang.X("about.title", "About"))
 	header.TextStyle.Bold = true
 
+	ipLabel := widget.NewLabel(lang.X("about.ipregion", "IP region checks ported from Davoyan/ipregion (MIT)"))
+	urlLabel := widget.NewLabel("https://github.com/grafov/adgui")
+
 	return container.NewVBox(
 		header,
 		adguiLabel,
 		cliLabel,
-		widget.NewLabel(lang.X("about.ipregion", "IP region checks ported from Davoyan/ipregion (MIT)")),
+		ipLabel,
+		urlLabel,
 	)
 }
