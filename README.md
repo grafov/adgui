@@ -20,6 +20,8 @@ Work in progress but the application is fully functional.
 
 ![region check](doc/scr1.png)
 
+Short [demo on Youtube](https://www.youtube.com/shorts/UpstI1BD-rE).
+
 ## Localization
 
 The interface language is selected automatically from the system locale (Fyne i18n). Supported UI languages: English (`en`), Russian (`ru`), and Esperanto (`eo`). English is used as fallback when no matching translation is available.

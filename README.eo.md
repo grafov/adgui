@@ -20,6 +20,8 @@ Laboro daŭras, sed la aplikaĵo estas plene funkcia.
 
 ![regiona kontrolo](doc/scr1.png)
 
+Mallonga [demonstrado en Youtube](https://www.youtube.com/shorts/UpstI1BD-rE).
+
 ## Lokalizado
 
 La interfaca lingvo estas aŭtomate elektita laŭ la sistema loko (Fyne i18n). Subtenataj UI-lingvoj: la angla (`en`), la rusa (`ru`) kaj Esperanto (`eo`). La angla estas rezerva, kiam kongrua traduko ne disponeblas.
