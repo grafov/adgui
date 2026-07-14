@@ -29,10 +29,7 @@ build:
 
 .PHONY: release-wayland
 release-wayland: # default build for Wayland (broken yet)
-	# BUG: Currently I have problems with Fyne on Wayland. Need more research.
-	#
-	# go tool fyne build -o build/adgui-wayland --release --tags wayland ./cmd/adgui
-	go tool fyne build -o build/adgui-wayland --release --tags x11 ./cmd/adgui
+	go tool fyne build -o build/adgui-wayland --release --tags wayland ./cmd/adgui
 
 .PHONY: release-xlibre
 release-xlibre: # build for X11/XLibre
