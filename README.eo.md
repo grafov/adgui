@@ -31,6 +31,8 @@ Aliaj lingvoj povas esti aldonitaj poste.
 
 ## Instalado
 
+> Anticipe vi devas instali `adguardvpn-cli` ie en la PATH.
+
 Nuntempe ne proviziĝas duumaj dosieroj. Sur via maŝino devus esti Go-programada medio.
 
 Ĝi provas instali en la protektitan dosierujon `/usr/local/bin`, kio postulas root-privilegiojn. Uzu `sudo`, `doas` aŭ alian taŭgan komandon per la SUDO-medio:

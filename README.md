@@ -31,6 +31,8 @@ Other languages could be added later.
 
 ## Installation
 
+> You should provide `adguardvpn-cli` installed somewhere in the PATH.
+
 No binaries provided at the moment. You should need to have Golang development environment on your machine.
 
 It tries to install into protected directory `/usr/local/bin` that requires root privileges. Use "sudo", "doas" or other appropriate command with SUDO environvent dir:
