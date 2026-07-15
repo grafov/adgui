@@ -100,6 +100,9 @@ type (
 		pasteWatchDone chan struct{}
 		pasteWatchOnce sync.Once
 
+		// Hidden window for modal prompts when dashboard is closed
+		promptWindow fyne.Window
+
 		// and...
 		withLogicIncluded
 	}
@@ -128,6 +131,7 @@ func New(vpnmgr *commands.VPNManager, appVersion string) *UI {
 		appVersion:        appVersion,
 		withLogicIncluded: logic,
 	}
+	ui.installSudoPasswordPrompt()
 	if ok {
 		ui.createTrayMenu()
 		// Register callback to notify UI about status changes
@@ -178,16 +182,17 @@ func (u *UI) createTrayMenu() {
 		u.Dashboard()
 	})
 	connectAuto := fyne.NewMenuItem(lang.X("tray.menu.connect_best", "Connect the best"), func() {
-		go u.vpnmgr.ConnectAuto()
+		u.runPrivileged(func() { u.vpnmgr.ConnectAuto() })
 	})
 	connectTo := fyne.NewMenuItem(lang.X("tray.menu.connect_to", "Connect To..."), func() {
 		u.LocationSelector()
 	})
 	disconnect := fyne.NewMenuItem(lang.X("tray.menu.disconnect", "Disconnect"), func() {
-		go u.vpnmgr.Disconnect()
+		u.runPrivileged(func() { u.vpnmgr.Disconnect() })
 	})
 	quitItem := fyne.NewMenuItem(lang.X("tray.menu.quit", "Quit"), func() {
 		u.stopPasteWatcher()
+		_ = u.vpnmgr.Close()
 		u.Fyne.Quit()
 	})
 	quitItem.IsQuit = true
@@ -1194,8 +1199,10 @@ func (u *UI) LocationSelector() {
 
 			selectedLocation := filteredLocations[id.Row-1]
 			fmt.Printf("Selected: %+v\n", selectedLocation)
-			go u.vpnmgr.ConnectToLocation(selectedLocation)
-			window.Hide()
+			u.runPrivileged(func() {
+				fyne.Do(func() { window.Hide() })
+				u.vpnmgr.ConnectToLocation(selectedLocation)
+			})
 		}
 
 		filterEntry.OnChanged = func(query string) {

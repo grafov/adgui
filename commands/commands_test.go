@@ -144,4 +144,65 @@ var _ = Describe("Command Queue Tracking and Killing", func() {
 			}, 2*time.Second, 10*time.Millisecond).Should(BeEmpty())
 		})
 	})
+
+	Context("when sudo wrapper is enabled", func() {
+		var (
+			tempScriptPath string
+			oldAdguardCmd  string
+			oldSudoWrap    string
+		)
+
+		BeforeEach(func() {
+			f, err := os.CreateTemp("", "fake-adguard-wrap-*.sh")
+			Expect(err).NotTo(HaveOccurred())
+			script := "#!/bin/sh\n" +
+				"printf 'PATH:%s\\n' \"$PATH\"\n" +
+				"printf 'ASKPASS:%s\\n' \"$SUDO_ASKPASS\"\n" +
+				"printf 'TERM:%s\\n' \"$TERM\"\n" +
+				"command -v sudo\n"
+			_, err = f.WriteString(script)
+			Expect(err).NotTo(HaveOccurred())
+			err = f.Close()
+			Expect(err).NotTo(HaveOccurred())
+			err = os.Chmod(f.Name(), 0o755)
+			Expect(err).NotTo(HaveOccurred())
+			tempScriptPath = f.Name()
+
+			oldAdguardCmd = os.Getenv("ADGUARD_CMD")
+			oldSudoWrap = os.Getenv("ADGUARD_SUDO_WRAP")
+			Expect(os.Setenv("ADGUARD_CMD", tempScriptPath)).To(Succeed())
+			Expect(os.Setenv("ADGUARD_SUDO_WRAP", "1")).To(Succeed())
+		})
+
+		AfterEach(func() {
+			if oldAdguardCmd != "" {
+				_ = os.Setenv("ADGUARD_CMD", oldAdguardCmd)
+			} else {
+				_ = os.Unsetenv("ADGUARD_CMD")
+			}
+			if oldSudoWrap != "" {
+				_ = os.Setenv("ADGUARD_SUDO_WRAP", oldSudoWrap)
+			} else {
+				_ = os.Unsetenv("ADGUARD_SUDO_WRAP")
+			}
+			_ = os.Remove(tempScriptPath)
+		})
+
+		It("should inject private sudo wrapper only into child CLI environment", func() {
+			originalPath := os.Getenv("PATH")
+			_ = os.Setenv("TERM", "xterm-test")
+			mgr := commands.New()
+			defer func() { _ = mgr.Close() }()
+
+			output := mgr.License()
+			Expect(os.Getenv("PATH")).To(Equal(originalPath))
+			Expect(output).To(ContainSubstring("ASKPASS:"))
+			Expect(output).To(Or(
+				ContainSubstring("/adgui/"),
+				ContainSubstring("adgui-sudo"),
+			))
+			Expect(output).To(ContainSubstring("sudo"))
+			Expect(output).To(ContainSubstring("TERM:\n"))
+		})
+	})
 })

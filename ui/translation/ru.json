@@ -100,5 +100,13 @@
     "ip_region.col.ipv6": "IPv6",
     "ip_region.same_as_ipv4": "—",
     "ip_region.cache.cached_data": "кешированные данные, проверено {{.Time}}",
-    "ip_region.cache.checked_at": "проверено {{.Time}}"
+    "ip_region.cache.checked_at": "проверено {{.Time}}",
+    "sudo.prompt.title": "Аутентификация администратора",
+    "sudo.prompt.message": "Введите пароль для управления VPN-подключениями:",
+    "sudo.prompt.placeholder": "Пароль",
+    "sudo.prompt.confirm": "OK",
+    "sudo.prompt.cancel": "Отмена",
+    "sudo.error.generic": "Не удалось пройти аутентификацию для привилегированных операций VPN.",
+    "sudo.error.invalid": "Неверный пароль. Операция VPN не была запущена.",
+    "sudo.error.prompt": "Диалог ввода пароля sudo недоступен."
 }

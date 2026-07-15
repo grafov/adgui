@@ -37,7 +37,7 @@ release-xlibre: # build for X11/XLibre
 
 .PHONY: test
 test:
-	go tool ginkgo ./...
+	go test ./...
 
 .PHONY: run
 run: build

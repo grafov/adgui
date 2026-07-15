@@ -94,5 +94,13 @@
     "ip_region.col.ipv6": "IPv6",
     "ip_region.same_as_ipv4": "—",
     "ip_region.cache.cached_data": "cached data, checked at {{.Time}}",
-    "ip_region.cache.checked_at": "checked at {{.Time}}"
+    "ip_region.cache.checked_at": "checked at {{.Time}}",
+    "sudo.prompt.title": "Administrator Authentication",
+    "sudo.prompt.message": "Enter your password to manage VPN connections:",
+    "sudo.prompt.placeholder": "Password",
+    "sudo.prompt.confirm": "OK",
+    "sudo.prompt.cancel": "Cancel",
+    "sudo.error.generic": "Could not authenticate for privileged VPN operations.",
+    "sudo.error.invalid": "Incorrect password. VPN operation was not started.",
+    "sudo.error.prompt": "Sudo password prompt is not available."
 }

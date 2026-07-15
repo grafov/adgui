@@ -55,13 +55,13 @@ func (u *UI) connectionsPanel() (*fyne.Container, *connectionsPanelWidgets) {
 	widgets.pingLabel.Alignment = fyne.TextAlignCenter
 
 	connectBtn := widget.NewButton("", func() {
-		go func() {
+		u.runPrivileged(func() {
 			if u.vpnmgr.IsConnected() {
 				u.vpnmgr.Disconnect()
 			} else {
 				u.vpnmgr.ConnectAuto()
 			}
-		}()
+		})
 	})
 	u.dashboardConnectBtn = connectBtn
 	u.updateDashboardButtons()

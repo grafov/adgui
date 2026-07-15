@@ -25,10 +25,11 @@ import (
 )
 
 const (
-	configDirName     = "adgui"
-	configFileName    = "adguirc"
-	keyAdguardCmd     = "ADGUARD_CMD"
-	keyAdguardKillCmd = "ADGUARD_KILL_CMD"
+	configDirName      = "adgui"
+	configFileName     = "adguirc"
+	keyAdguardCmd      = "ADGUARD_CMD"
+	keyAdguardKillCmd  = "ADGUARD_KILL_CMD"
+	keyAdguardSudoWrap = "ADGUARD_SUDO_WRAP"
 )
 
 // AdguardCmd reads ~/.config/adgui/adguirc (INI) and returns the ADGUARD_CMD value.
@@ -55,6 +56,42 @@ func AdguardCmd() (string, error) {
 // AdguardKillCmd reads ~/.config/adgui/adguirc (INI) and returns the ADGUARD_KILL_CMD value.
 // It returns an empty string when the file is missing or the key is not set.
 // Any other read or parse error is returned to the caller.
+// AdguardSudoWrapEnabled reports whether adgui should inject the private sudo PATH wrapper.
+// Default is true. Set ADGUARD_SUDO_WRAP=0/false/no in adguirc or environment to disable.
+func AdguardSudoWrapEnabled() (bool, error) {
+	if env := strings.TrimSpace(os.Getenv(keyAdguardSudoWrap)); env != "" {
+		return parseBoolDefaultTrue(env), nil
+	}
+
+	configPath, err := configPath()
+	if err != nil {
+		return true, err
+	}
+
+	cfg, err := ini.Load(configPath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return true, nil
+		}
+		return true, err
+	}
+
+	value := strings.TrimSpace(cfg.Section("").Key(keyAdguardSudoWrap).String())
+	if value == "" {
+		return true, nil
+	}
+	return parseBoolDefaultTrue(value), nil
+}
+
+func parseBoolDefaultTrue(value string) bool {
+	switch strings.ToLower(value) {
+	case "0", "false", "no", "off":
+		return false
+	default:
+		return true
+	}
+}
+
 func AdguardKillCmd() (string, error) {
 	configPath, err := configPath()
 	if err != nil {

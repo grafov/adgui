@@ -17,6 +17,7 @@ package commands
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -26,11 +27,22 @@ import (
 	"syscall"
 	"time"
 
+	"adgui/commands/sudowrap"
 	"adgui/config"
 	"adgui/locations"
 )
 
 const startDelay = 3 * time.Second // Начальная задержка
+
+var (
+	// ErrSudoPasswordRequired is returned when sudo auth was cancelled or empty.
+	ErrSudoPasswordRequired = errors.New("sudo password required")
+	// ErrSudoPasswordPrompt is returned when the UI password prompt is not configured.
+	ErrSudoPasswordPrompt = errors.New("sudo password prompt not configured")
+)
+
+// PasswordPrompt requests the user's sudo password from the UI layer.
+type PasswordPrompt func() ([]byte, error)
 
 // messages captured from adguard-cli stdout
 const (
@@ -99,6 +111,10 @@ type VPNManager struct {
 	cmdInfos      map[uint64]RunningCommand
 	nextCmdID     uint64
 	onQueueChange func()
+
+	sudoEnv       *sudowrap.Env
+	passwordPrompt PasswordPrompt
+	promptMx       sync.Mutex
 }
 
 func New() *VPNManager {
@@ -112,8 +128,78 @@ func New() *VPNManager {
 	} else {
 		mgr.history = history
 	}
+
+	enabled, err := config.AdguardSudoWrapEnabled()
+	if err != nil {
+		fmt.Printf("config read error for sudo wrap: %v\n", err)
+		enabled = true
+	}
+	sudoEnv, err := sudowrap.Setup(enabled)
+	if err != nil {
+		fmt.Printf("sudo wrap setup error: %v\n", err)
+	} else {
+		mgr.sudoEnv = sudoEnv
+	}
+
 	go mgr.statusCheckLoop()
 	return &mgr
+}
+
+// SetPasswordPrompt configures the UI callback used to collect the sudo password.
+func (v *VPNManager) SetPasswordPrompt(prompt PasswordPrompt) {
+	v.promptMx.Lock()
+	defer v.promptMx.Unlock()
+	v.passwordPrompt = prompt
+}
+
+// EnsureSudoPassword validates or collects sudo credentials for privileged CLI operations.
+// A valid sudo ticket is enough (wrapper uses sudo -n path). Otherwise both the in-memory
+// password and the on-disk .pass file are required for the askpass path.
+func (v *VPNManager) EnsureSudoPassword() error {
+	if v.sudoEnv == nil || !v.sudoEnv.Enabled() {
+		return nil
+	}
+	if sudowrap.ValidTicket("") {
+		return nil
+	}
+	if v.sudoEnv.ReadyForAskpass() {
+		return nil
+	}
+
+	v.promptMx.Lock()
+	prompt := v.passwordPrompt
+	v.promptMx.Unlock()
+	if prompt == nil {
+		return ErrSudoPasswordPrompt
+	}
+
+	password, err := prompt()
+	if err != nil {
+		return err
+	}
+	defer sudowrapZero(password)
+
+	if len(password) == 0 {
+		return ErrSudoPasswordRequired
+	}
+	if err := v.sudoEnv.SetPassword(password); err != nil {
+		return err
+	}
+	return nil
+}
+
+// Close wipes sudo session secrets and removes the private wrapper directory.
+func (v *VPNManager) Close() error {
+	if v.sudoEnv == nil {
+		return nil
+	}
+	return v.sudoEnv.Close()
+}
+
+func sudowrapZero(password []byte) {
+	for i := range password {
+		password[i] = 0
+	}
 }
 
 func (v *VPNManager) Location() string {
@@ -189,6 +275,8 @@ func (v *VPNManager) SetStatusChangeCallback(callback func()) {
 func (v *VPNManager) executeCommand(args ...string) (string, error) {
 	cmdPath := resolveCommandPath()
 	cmd := exec.Command(cmdPath, args...)
+	v.applySudoWrap(cmd)
+	prepareCLICommand(cmd)
 
 	var buf bytes.Buffer
 	cmd.Stdout = &buf
@@ -203,6 +291,16 @@ func (v *VPNManager) executeCommand(args ...string) (string, error) {
 
 	err := cmd.Wait()
 	return buf.String(), err
+}
+
+// prepareCLICommand detaches the child from the parent's controlling terminal so
+// sudo inside adguardvpn-cli cannot prompt on the Konsole TTY that started adgui.
+func prepareCLICommand(cmd *exec.Cmd) {
+	if cmd == nil {
+		return
+	}
+	cmd.Stdin = nil
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 }
 
 func (v *VPNManager) registerCommand(path string, args []string, cmd *exec.Cmd) (uint64, func()) {
@@ -344,7 +442,17 @@ func resolveCommandPath() string {
 	return cmdPath
 }
 
+func (v *VPNManager) applySudoWrap(cmd *exec.Cmd) {
+	if v.sudoEnv != nil {
+		v.sudoEnv.Apply(cmd)
+	}
+}
+
 func (v *VPNManager) ConnectAuto() {
+	if err := v.EnsureSudoPassword(); err != nil {
+		fmt.Printf("sudo auth error: %v\n", err)
+		return
+	}
 	// Получаем список локаций
 	output, err := v.executeCommand("connect")
 	if err != nil {
@@ -372,6 +480,10 @@ func (v *VPNManager) ListLocations() []locations.Location {
 }
 
 func (v *VPNManager) ConnectToLocation(loc locations.Location) {
+	if err := v.EnsureSudoPassword(); err != nil {
+		fmt.Printf("sudo auth error: %v\n", err)
+		return
+	}
 	output, err := v.executeCommand("connect", "-l", loc.City)
 	if err != nil {
 		fmt.Printf("Connect to location error: %v\nOutput: %s\n", err, output)
@@ -505,6 +617,8 @@ var ansiStripRegex = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 func (v *VPNManager) CLIVersion() string {
 	cmdPath := resolveCommandPath()
 	cmd := exec.Command(cmdPath, "--version")
+	v.applySudoWrap(cmd)
+	prepareCLICommand(cmd)
 	var buf bytes.Buffer
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf
@@ -521,6 +635,10 @@ func (v *VPNManager) CLIVersion() string {
 }
 
 func (v *VPNManager) Disconnect() {
+	if err := v.EnsureSudoPassword(); err != nil {
+		fmt.Printf("sudo auth error: %v\n", err)
+		return
+	}
 	output, err := v.executeCommand("disconnect")
 	if err != nil {
 		fmt.Printf("Disconnect error: %v\nOutput: %s\n", err, output)

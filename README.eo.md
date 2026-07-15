@@ -39,6 +39,18 @@ Aŭ uzu `PREFIX` por instali en alian dosierujon, ekzemple hejme:
 
 `PREFIX=~/bin make install`
 
+### Sudo kaj TUN-reĝimo
+
+`adguardvpn-cli` en TUN-reĝimo agordas retajn interfacaĵojn kaj kursojn kiel root, do la CLI interne vokas `sudo`. adgui enmetas izolitan `sudo`-wrapper nur en medion de infanaj CLI-procezoj (`$XDG_RUNTIME_DIR/adgui/<pid>/`). La tutmonda `PATH` de via login-shell, `~/.bashrc` kaj sistemaj dosierujoj **ne estas ŝanĝitaj**.
+
+adgui transdonas al la CLI minimuman desktop/XDG-medion (uzanto, lokalo, display/session) kaj lanĉas `adguardvpn-cli` sen controlling terminal, por ke `sudo` ne petu pasvorton en la terminalo, kiu startigis adgui. La wrapper unue uzas la ekzistantan sudo-kaŝmemoron (`sudo -n`). Se tio malsukcesas, ĝi uzas askpass. adgui montras pasvortan dialogon nur kiam ne ekzistas valida bileto; la pasvorto estas konservita en rultempa `.pass` (reĝimo `0600`) por askpass kaj forviŝita ĉe eliro.
+
+En `~/.config/adgui/adguirc` vi povas agordi:
+
+- `ADGUARD_CMD` — vojo al `adguardvpn-cli`
+- `ADGUARD_KILL_CMD` — neinteraga kill-komando (ekz. `/usr/bin/sudo -n kill -TERM`)
+- `ADGUARD_SUDO_WRAP=0` — malŝalti la wrapper-on (por passwordless sudo / sencimigo)
+
 ## Funkcioj
 
 Unue ensalutu en vian AdGuard-konton per `adguardvpn-cli`. Mi ne enmetis ĉi tiun parton en la GUI por simpleco, ĉar vi bezonas ĝin nur unufoje.

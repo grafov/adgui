@@ -123,5 +123,13 @@
     "ip_region.col.ipv6": "IPv6",
     "ip_region.same_as_ipv4": "—",
     "ip_region.cache.cached_data": "kaŝmemoritaj datumoj, kontrolita je {{.Time}}",
-    "ip_region.cache.checked_at": "kontrolita je {{.Time}}"
+    "ip_region.cache.checked_at": "kontrolita je {{.Time}}",
+    "sudo.prompt.title": "Administranta aŭtentigo",
+    "sudo.prompt.message": "Enigu vian pasvorton por administri VPN-konektojn:",
+    "sudo.prompt.placeholder": "Pasvorto",
+    "sudo.prompt.confirm": "OK",
+    "sudo.prompt.cancel": "Nuligi",
+    "sudo.error.generic": "Ne eblis aŭtentigi por privilegiitaj VPN-operacioj.",
+    "sudo.error.invalid": "Malĝusta pasvorto. VPN-operacio ne estis komencita.",
+    "sudo.error.prompt": "Pasvorta dialogo por sudo ne disponeblas."
 }
