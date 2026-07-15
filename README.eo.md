@@ -1,5 +1,7 @@
 # AdGUI por AdGuard VPN
 
+![Adguard GUI](res/adguardvpn-gui.svg)
+
 **Languages:** [English](README.md) · [Русский](README.ru.md) · [Esperanto](README.eo.md)
 
 Simpla grafika interfaco por regi la CLI de AdGuard VPN sur Linux-surtableto (XLibre/X11 aŭ Wayland).
