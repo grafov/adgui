@@ -43,13 +43,14 @@ Or use `PREFIX` for installing to another directory, for example under home:
 
 `adguardvpn-cli` in TUN mode configures network interfaces and routes as root, so the CLI invokes `sudo` internally. adgui injects an isolated `sudo` wrapper only into child CLI process environments (`$XDG_RUNTIME_DIR/adgui/<pid>/`). Your login-shell `PATH`, shell rc files, and system directories are **not** modified.
 
-adgui passes a minimal desktop/XDG environment to the CLI (user, locale, display/session vars) and starts `adguardvpn-cli` without a controlling terminal, so `sudo` cannot ask for a password in the terminal that launched adgui. The wrapper first tries the existing sudo credential cache (`sudo -n`). If that fails, it uses askpass. adgui shows a password dialog only when there is no valid ticket; the password is stored in a runtime `.pass` file (mode `0600`) for askpass and wiped on exit.
+adgui passes a minimal desktop/XDG environment to the CLI (user, locale, display/session vars) and starts `adguardvpn-cli` without a controlling terminal, so `sudo` cannot ask for a password in the terminal that launched adgui. When a runtime `.pass` file exists, the wrapper uses askpass (`sudo -A`); otherwise it runs non-interactive `sudo -n` on the real command (credential cache and NOPASSWD, including command-specific rules). adgui shows a password dialog only when askpass is enabled and there is no valid ticket; the password is stored in `.pass` (mode `0600`) and wiped on exit.
 
 In `~/.config/adgui/adguirc` you can set:
 
 - `ADGUARD_CMD` — path to `adguardvpn-cli`
 - `ADGUARD_KILL_CMD` — non-interactive kill prefix (e.g. `/usr/bin/sudo -n kill -TERM`)
-- `ADGUARD_SUDO_WRAP=0` — disable the wrapper (for passwordless sudo / debugging)
+- `ADGUARD_SUDO_WRAP=0` — disable the wrapper entirely (debugging / fully passwordless setups)
+- `ADGUARD_SUDO_ASKPASS=0` — keep the wrapper but never prompt for a password; only `sudo -n` (for passwordless sudoers)
 
 ## Features
 

@@ -134,7 +134,12 @@ func New() *VPNManager {
 		fmt.Printf("config read error for sudo wrap: %v\n", err)
 		enabled = true
 	}
-	sudoEnv, err := sudowrap.Setup(enabled)
+	askpass, err := config.AdguardSudoAskpassEnabled()
+	if err != nil {
+		fmt.Printf("config read error for sudo askpass: %v\n", err)
+		askpass = true
+	}
+	sudoEnv, err := sudowrap.Setup(enabled, askpass)
 	if err != nil {
 		fmt.Printf("sudo wrap setup error: %v\n", err)
 	} else {
@@ -153,10 +158,14 @@ func (v *VPNManager) SetPasswordPrompt(prompt PasswordPrompt) {
 }
 
 // EnsureSudoPassword validates or collects sudo credentials for privileged CLI operations.
-// A valid sudo ticket is enough (wrapper uses sudo -n path). Otherwise both the in-memory
+// When askpass is disabled, elevation relies on sudo -n only (ticket / NOPASSWD).
+// A valid sudo ticket is enough (wrapper uses sudo -n). Otherwise both the in-memory
 // password and the on-disk .pass file are required for the askpass path.
 func (v *VPNManager) EnsureSudoPassword() error {
 	if v.sudoEnv == nil || !v.sudoEnv.Enabled() {
+		return nil
+	}
+	if !v.sudoEnv.AskpassEnabled() {
 		return nil
 	}
 	if sudowrap.ValidTicket("") {

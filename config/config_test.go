@@ -67,3 +67,50 @@ func TestAdguardSudoWrapEnabledConfigFile(t *testing.T) {
 		t.Fatal("expected sudo wrap disabled from config")
 	}
 }
+
+func TestAdguardSudoAskpassEnabledDefault(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("ADGUARD_SUDO_ASKPASS", "")
+
+	enabled, err := AdguardSudoAskpassEnabled()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !enabled {
+		t.Fatal("expected sudo askpass enabled by default")
+	}
+}
+
+func TestAdguardSudoAskpassEnabledEnvOverride(t *testing.T) {
+	t.Setenv("ADGUARD_SUDO_ASKPASS", "0")
+	enabled, err := AdguardSudoAskpassEnabled()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if enabled {
+		t.Fatal("expected sudo askpass disabled from env")
+	}
+}
+
+func TestAdguardSudoAskpassEnabledConfigFile(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("ADGUARD_SUDO_ASKPASS", "")
+
+	dir := filepath.Join(home, ".config", configDirName)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, configFileName), []byte("ADGUARD_SUDO_ASKPASS=false\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	enabled, err := AdguardSudoAskpassEnabled()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if enabled {
+		t.Fatal("expected sudo askpass disabled from config")
+	}
+}

@@ -25,11 +25,12 @@ import (
 )
 
 const (
-	configDirName      = "adgui"
-	configFileName     = "adguirc"
-	keyAdguardCmd      = "ADGUARD_CMD"
-	keyAdguardKillCmd  = "ADGUARD_KILL_CMD"
-	keyAdguardSudoWrap = "ADGUARD_SUDO_WRAP"
+	configDirName         = "adgui"
+	configFileName        = "adguirc"
+	keyAdguardCmd         = "ADGUARD_CMD"
+	keyAdguardKillCmd     = "ADGUARD_KILL_CMD"
+	keyAdguardSudoWrap    = "ADGUARD_SUDO_WRAP"
+	keyAdguardSudoAskpass = "ADGUARD_SUDO_ASKPASS"
 )
 
 // AdguardCmd reads ~/.config/adgui/adguirc (INI) and returns the ADGUARD_CMD value.
@@ -53,13 +54,21 @@ func AdguardCmd() (string, error) {
 	return value, nil
 }
 
-// AdguardKillCmd reads ~/.config/adgui/adguirc (INI) and returns the ADGUARD_KILL_CMD value.
-// It returns an empty string when the file is missing or the key is not set.
-// Any other read or parse error is returned to the caller.
 // AdguardSudoWrapEnabled reports whether adgui should inject the private sudo PATH wrapper.
 // Default is true. Set ADGUARD_SUDO_WRAP=0/false/no in adguirc or environment to disable.
 func AdguardSudoWrapEnabled() (bool, error) {
-	if env := strings.TrimSpace(os.Getenv(keyAdguardSudoWrap)); env != "" {
+	return boolConfigDefaultTrue(keyAdguardSudoWrap)
+}
+
+// AdguardSudoAskpassEnabled reports whether adgui should collect a sudo password via GUI
+// askpass for privileged CLI operations. Default is true.
+// Set ADGUARD_SUDO_ASKPASS=0/false/no in adguirc or environment to disable (passwordless sudo).
+func AdguardSudoAskpassEnabled() (bool, error) {
+	return boolConfigDefaultTrue(keyAdguardSudoAskpass)
+}
+
+func boolConfigDefaultTrue(key string) (bool, error) {
+	if env := strings.TrimSpace(os.Getenv(key)); env != "" {
 		return parseBoolDefaultTrue(env), nil
 	}
 
@@ -76,7 +85,7 @@ func AdguardSudoWrapEnabled() (bool, error) {
 		return true, err
 	}
 
-	value := strings.TrimSpace(cfg.Section("").Key(keyAdguardSudoWrap).String())
+	value := strings.TrimSpace(cfg.Section("").Key(key).String())
 	if value == "" {
 		return true, nil
 	}
@@ -92,6 +101,9 @@ func parseBoolDefaultTrue(value string) bool {
 	}
 }
 
+// AdguardKillCmd reads ~/.config/adgui/adguirc (INI) and returns the ADGUARD_KILL_CMD value.
+// It returns an empty string when the file is missing or the key is not set.
+// Any other read or parse error is returned to the caller.
 func AdguardKillCmd() (string, error) {
 	configPath, err := configPath()
 	if err != nil {

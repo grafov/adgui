@@ -89,15 +89,17 @@ func (u *UI) showSudoPasswordDialog(resultCh chan<- sudoPromptResult) {
 func (u *UI) activeWindow() fyne.Window {
 	u.locationmx.RLock()
 	loc := u.locationWindow
+	locShown := u.locationShown
 	u.locationmx.RUnlock()
-	if loc != nil {
+	if loc != nil && locShown {
 		return loc
 	}
 
 	u.dashboardmx.RLock()
 	dash := u.dashboardWindow
+	dashShown := u.dashboardShown
 	u.dashboardmx.RUnlock()
-	if dash != nil {
+	if dash != nil && dashShown {
 		return dash
 	}
 

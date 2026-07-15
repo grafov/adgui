@@ -39,17 +39,19 @@ var _ = Describe("sudowrap", func() {
 	})
 
 	It("does not change parent PATH after Setup", func() {
-		env, err := sudowrap.Setup(true)
+		env, err := sudowrap.Setup(true, true)
 		Expect(err).NotTo(HaveOccurred())
 		defer func() { _ = env.Close() }()
 
 		Expect(os.Getenv("PATH")).To(Equal(originalPath))
 	})
 
-	It("creates private runtime dir with resilient sudo and askpass wrappers", func() {
-		env, err := sudowrap.Setup(true)
+	It("creates private runtime dir with askpass-enabled sudo wrapper", func() {
+		env, err := sudowrap.Setup(true, true)
 		Expect(err).NotTo(HaveOccurred())
 		defer func() { _ = env.Close() }()
+
+		Expect(env.AskpassEnabled()).To(BeTrue())
 
 		dir := env.Dir()
 		Expect(dir).NotTo(BeEmpty())
@@ -67,10 +69,10 @@ var _ = Describe("sudowrap", func() {
 		sudoContent, err := os.ReadFile(sudoPath)
 		Expect(err).NotTo(HaveOccurred())
 		sudoScript := string(sudoContent)
-		Expect(sudoScript).To(ContainSubstring("-n -v"))
+		Expect(sudoScript).NotTo(ContainSubstring("-n -v"))
 		Expect(sudoScript).To(ContainSubstring(" -A \"$@\""))
-		Expect(sudoScript).To(ContainSubstring("[ ! -f \"$PASS\" ]"))
-		Expect(sudoScript).To(ContainSubstring("password required but not provided"))
+		Expect(sudoScript).To(ContainSubstring(" -n \"$@\""))
+		Expect(sudoScript).To(ContainSubstring("[ -f \"$PASS\" ]"))
 
 		askpassContent, err := os.ReadFile(filepath.Join(dir, "askpass"))
 		Expect(err).NotTo(HaveOccurred())
@@ -79,8 +81,27 @@ var _ = Describe("sudowrap", func() {
 		Expect(askpassScript).To(ContainSubstring("cat \"$PASS\""))
 	})
 
+	It("creates non-interactive-only sudo wrapper when askpass is disabled", func() {
+		env, err := sudowrap.Setup(true, false)
+		Expect(err).NotTo(HaveOccurred())
+		defer func() { _ = env.Close() }()
+
+		Expect(env.AskpassEnabled()).To(BeFalse())
+		Expect(env.NeedsPrompt()).To(BeFalse())
+
+		sudoContent, err := os.ReadFile(filepath.Join(env.Dir(), "sudo"))
+		Expect(err).NotTo(HaveOccurred())
+		sudoScript := string(sudoContent)
+		Expect(sudoScript).To(ContainSubstring(" -n \"$@\""))
+		Expect(sudoScript).NotTo(ContainSubstring(" -A "))
+		Expect(sudoScript).NotTo(ContainSubstring("PASS="))
+
+		_, err = os.Stat(filepath.Join(env.Dir(), "askpass"))
+		Expect(os.IsNotExist(err)).To(BeTrue())
+	})
+
 	It("Apply filters terminal env and keeps desktop/XDG vars", func() {
-		env, err := sudowrap.Setup(true)
+		env, err := sudowrap.Setup(true, true)
 		Expect(err).NotTo(HaveOccurred())
 		defer func() { _ = env.Close() }()
 
@@ -157,7 +178,7 @@ var _ = Describe("sudowrap", func() {
 	})
 
 	It("ReadyForAskpass requires both memory password and .pass file", func() {
-		env, err := sudowrap.Setup(true)
+		env, err := sudowrap.Setup(true, true)
 		Expect(err).NotTo(HaveOccurred())
 		defer func() { _ = env.Close() }()
 
@@ -170,7 +191,7 @@ var _ = Describe("sudowrap", func() {
 	})
 
 	It("Close removes runtime dir and clears password", func() {
-		env, err := sudowrap.Setup(true)
+		env, err := sudowrap.Setup(true, true)
 		Expect(err).NotTo(HaveOccurred())
 
 		dir := env.Dir()
@@ -184,9 +205,10 @@ var _ = Describe("sudowrap", func() {
 	})
 
 	It("disabled Setup returns env without runtime dir", func() {
-		env, err := sudowrap.Setup(false)
+		env, err := sudowrap.Setup(false, false)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(env.Enabled()).To(BeFalse())
+		Expect(env.AskpassEnabled()).To(BeFalse())
 		Expect(env.Dir()).To(BeEmpty())
 	})
 })

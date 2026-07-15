@@ -62,16 +62,18 @@ var (
 // Env holds an isolated runtime directory with sudo and askpass wrappers.
 // PATH is only injected into child processes via Apply; the parent process PATH is never changed.
 type Env struct {
-	enabled bool
-	dir     string
-	pass    []byte
-	passMx  sync.Mutex
+	enabled  bool
+	askpass  bool
+	dir      string
+	pass     []byte
+	passMx   sync.Mutex
 	realSudo string
 }
 
 // Setup creates a private runtime directory with sudo and askpass wrapper scripts.
-// When enabled is false, Setup returns a disabled Env without creating files.
-func Setup(enabled bool) (*Env, error) {
+// When enabled is false, Setup returns a disabled Env without creating files (askpass is ignored).
+// When askpass is false, the wrapper only uses sudo -n (passwordless / ticket path).
+func Setup(enabled, askpass bool) (*Env, error) {
 	realSudo, err := resolveRealSudo()
 	if err != nil {
 		return nil, err
@@ -79,6 +81,7 @@ func Setup(enabled bool) (*Env, error) {
 
 	env := &Env{
 		enabled:  enabled,
+		askpass:  enabled && askpass,
 		realSudo: realSudo,
 	}
 	if !enabled {
@@ -117,29 +120,35 @@ func createRuntimeDir() (string, error) {
 }
 
 func (e *Env) writeScripts() error {
-	passPath := filepath.Join(e.dir, passName)
 	real := shellQuote(e.realSudo)
-	pass := shellQuote(passPath)
 
-	// Prefer cached credentials / NOPASSWD via -n -v; only use -A when a password is required
-	// and the session secret file exists.
-	sudoScript := "#!/bin/sh\n" +
-		"REAL=" + real + "\n" +
-		"PASS=" + pass + "\n" +
-		"if \"$REAL\" -n -v >/dev/null 2>&1; then\n" +
-		"  exec \"$REAL\" \"$@\"\n" +
-		"fi\n" +
-		"if [ ! -f \"$PASS\" ]; then\n" +
-		"  echo \"adgui-sudo: password required but not provided\" >&2\n" +
-		"  exit 1\n" +
-		"fi\n" +
-		"exec \"$REAL\" -A \"$@\"\n"
+	var sudoScript string
+	if e.askpass {
+		pass := shellQuote(filepath.Join(e.dir, passName))
+		// Use askpass when .pass exists; otherwise non-interactive -n on the real
+		// command (ticket cache and command-specific NOPASSWD).
+		sudoScript = "#!/bin/sh\n" +
+			"REAL=" + real + "\n" +
+			"PASS=" + pass + "\n" +
+			"if [ -f \"$PASS\" ]; then\n" +
+			"  exec \"$REAL\" -A \"$@\"\n" +
+			"fi\n" +
+			"exec \"$REAL\" -n \"$@\"\n"
+	} else {
+		sudoScript = "#!/bin/sh\n" +
+			"REAL=" + real + "\n" +
+			"exec \"$REAL\" -n \"$@\"\n"
+	}
 	if err := writeExecutable(filepath.Join(e.dir, sudoName), sudoScript); err != nil {
 		return err
 	}
 
+	if !e.askpass {
+		return nil
+	}
+
 	askpassScript := "#!/bin/sh\n" +
-		"PASS=" + pass + "\n" +
+		"PASS=" + shellQuote(filepath.Join(e.dir, passName)) + "\n" +
 		"[ -f \"$PASS\" ] || exit 1\n" +
 		"cat \"$PASS\"\n"
 	return writeExecutable(filepath.Join(e.dir, askpassName), askpassScript)
@@ -173,6 +182,11 @@ func resolveRealSudo() (string, error) {
 // Enabled reports whether the wrapper is active.
 func (e *Env) Enabled() bool {
 	return e != nil && e.enabled
+}
+
+// AskpassEnabled reports whether GUI askpass / .pass path is active.
+func (e *Env) AskpassEnabled() bool {
+	return e != nil && e.enabled && e.askpass
 }
 
 // Dir returns the private runtime directory path.
@@ -209,7 +223,7 @@ func (e *Env) ReadyForAskpass() bool {
 
 // NeedsPrompt reports whether elevation likely requires a password prompt.
 func (e *Env) NeedsPrompt() bool {
-	if e == nil || !e.enabled {
+	if e == nil || !e.enabled || !e.askpass {
 		return false
 	}
 	return !ValidTicket(e.realSudo) && !e.ReadyForAskpass()
@@ -236,11 +250,11 @@ func (e *Env) Apply(cmd *exec.Cmd) {
 	if e == nil || !e.enabled || e.dir == "" || cmd == nil {
 		return
 	}
-	cmd.Env = buildChildEnv(e.dir)
+	cmd.Env = buildChildEnv(e.dir, e.askpass)
 }
 
 // buildChildEnv builds a whitelist-based environment for CLI and sudo children.
-func buildChildEnv(wrapperDir string) []string {
+func buildChildEnv(wrapperDir string, askpass bool) []string {
 	out := make([]string, 0, 24)
 	for _, item := range os.Environ() {
 		key, _, ok := strings.Cut(item, "=")
@@ -255,7 +269,9 @@ func buildChildEnv(wrapperDir string) []string {
 
 	pathValue := wrapperDir + string(os.PathListSeparator) + safePath(os.Getenv("PATH"))
 	out = setEnvVar(out, "PATH", pathValue)
-	out = setEnvVar(out, "SUDO_ASKPASS", filepath.Join(wrapperDir, askpassName))
+	if askpass {
+		out = setEnvVar(out, "SUDO_ASKPASS", filepath.Join(wrapperDir, askpassName))
+	}
 	return out
 }
 
@@ -304,7 +320,7 @@ func setEnvVar(env []string, key, value string) []string {
 
 // SetPassword stores the password for askpass and warms the sudo ticket.
 func (e *Env) SetPassword(password []byte) error {
-	if e == nil || !e.enabled {
+	if e == nil || !e.enabled || !e.askpass {
 		return nil
 	}
 	if len(password) == 0 {
@@ -341,7 +357,7 @@ func (e *Env) writePasswordFile(password []byte) error {
 // warmTicket validates credentials via sudo -A (askpass), never via interactive TTY or -S stdin.
 func (e *Env) warmTicket() error {
 	cmd := exec.Command(e.realSudo, "-A", "-v")
-	cmd.Env = buildChildEnv(e.dir)
+	cmd.Env = buildChildEnv(e.dir, true)
 	cmd.Stdin = nil
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 

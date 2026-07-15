@@ -79,6 +79,7 @@ type (
 		// Dashboard window and widgets for live updates
 		dashboardmx              sync.RWMutex
 		dashboardWindow          fyne.Window
+		dashboardShown           bool
 		dashboardConnectBtn      *widget.Button
 		dashboardTabs            *container.AppTabs
 		dashboardConnectionsWids *connectionsPanelWidgets
@@ -94,6 +95,7 @@ type (
 		// Location selector window
 		locationmx     sync.RWMutex
 		locationWindow fyne.Window
+		locationShown  bool
 
 		// Domains tab clipboard polling lifecycle
 		pasteWatchStop chan struct{}
@@ -397,6 +399,18 @@ func (u *UI) clearIPRegionCache() {
 	}
 }
 
+func (u *UI) setDashboardShown(shown bool) {
+	u.dashboardmx.Lock()
+	u.dashboardShown = shown
+	u.dashboardmx.Unlock()
+}
+
+func (u *UI) setLocationShown(shown bool) {
+	u.locationmx.Lock()
+	u.locationShown = shown
+	u.locationmx.Unlock()
+}
+
 func (u *UI) Dashboard() string {
 	u.dashboardmx.Lock()
 	defer u.dashboardmx.Unlock()
@@ -406,6 +420,7 @@ func (u *UI) Dashboard() string {
 	// inside Fyne's processMouseMoved (nil view). Hide() does not set closing.
 	if u.dashboardWindow != nil {
 		u.dashboardWindow.Show()
+		u.dashboardShown = true
 		return ""
 	}
 
@@ -435,14 +450,17 @@ func (u *UI) Dashboard() string {
 	window.Canvas().SetOnTypedKey(func(k *fyne.KeyEvent) {
 		if k.Name == fyne.KeyEscape {
 			window.Hide()
+			u.setDashboardShown(false)
 		}
 	})
 
 	window.SetCloseIntercept(func() {
 		window.Hide()
+		u.setDashboardShown(false)
 	})
 
 	window.Show()
+	u.dashboardShown = true
 	return ""
 }
 
@@ -968,6 +986,7 @@ func (u *UI) LocationSelector() {
 
 	if u.locationWindow != nil {
 		u.locationWindow.Show()
+		u.locationShown = true
 		return
 	}
 
@@ -1029,6 +1048,7 @@ func (u *UI) LocationSelector() {
 
 		window.SetCloseIntercept(func() {
 			window.Hide()
+			u.setLocationShown(false)
 		})
 
 		filterEntry := widget.NewEntry()
@@ -1200,7 +1220,10 @@ func (u *UI) LocationSelector() {
 			selectedLocation := filteredLocations[id.Row-1]
 			fmt.Printf("Selected: %+v\n", selectedLocation)
 			u.runPrivileged(func() {
-				fyne.Do(func() { window.Hide() })
+				fyne.Do(func() {
+					window.Hide()
+					u.setLocationShown(false)
+				})
 				u.vpnmgr.ConnectToLocation(selectedLocation)
 			})
 		}
@@ -1216,10 +1239,12 @@ func (u *UI) LocationSelector() {
 		window.Canvas().SetOnTypedKey(func(k *fyne.KeyEvent) {
 			if k.Name == fyne.KeyEscape {
 				window.Hide()
+				u.setLocationShown(false)
 			}
 		})
 
 		window.Show()
+		u.setLocationShown(true)
 
 		go func() {
 			locs := u.vpnmgr.ListLocations()

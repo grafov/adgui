@@ -43,13 +43,14 @@ Aŭ uzu `PREFIX` por instali en alian dosierujon, ekzemple hejme:
 
 `adguardvpn-cli` en TUN-reĝimo agordas retajn interfacaĵojn kaj kursojn kiel root, do la CLI interne vokas `sudo`. adgui enmetas izolitan `sudo`-wrapper nur en medion de infanaj CLI-procezoj (`$XDG_RUNTIME_DIR/adgui/<pid>/`). La tutmonda `PATH` de via login-shell, `~/.bashrc` kaj sistemaj dosierujoj **ne estas ŝanĝitaj**.
 
-adgui transdonas al la CLI minimuman desktop/XDG-medion (uzanto, lokalo, display/session) kaj lanĉas `adguardvpn-cli` sen controlling terminal, por ke `sudo` ne petu pasvorton en la terminalo, kiu startigis adgui. La wrapper unue uzas la ekzistantan sudo-kaŝmemoron (`sudo -n`). Se tio malsukcesas, ĝi uzas askpass. adgui montras pasvortan dialogon nur kiam ne ekzistas valida bileto; la pasvorto estas konservita en rultempa `.pass` (reĝimo `0600`) por askpass kaj forviŝita ĉe eliro.
+adgui transdonas al la CLI minimuman desktop/XDG-medion (uzanto, lokalo, display/session) kaj lanĉas `adguardvpn-cli` sen controlling terminal, por ke `sudo` ne petu pasvorton en la terminalo, kiu startigis adgui. Se ekzistas rultempa `.pass`, la wrapper uzas askpass (`sudo -A`); alie ĝi rulas neinteragan `sudo -n` sur la reala komando (kaŝmemoro de credentials kaj NOPASSWD, inkluzive komando-specifajn regulojn). adgui montras pasvortan dialogon nur kiam askpass estas ŝaltita kaj ne ekzistas valida bileto; la pasvorto estas konservita en `.pass` (reĝimo `0600`) kaj forviŝita ĉe eliro.
 
 En `~/.config/adgui/adguirc` vi povas agordi:
 
 - `ADGUARD_CMD` — vojo al `adguardvpn-cli`
 - `ADGUARD_KILL_CMD` — neinteraga kill-komando (ekz. `/usr/bin/sudo -n kill -TERM`)
-- `ADGUARD_SUDO_WRAP=0` — malŝalti la wrapper-on (por passwordless sudo / sencimigo)
+- `ADGUARD_SUDO_WRAP=0` — tute malŝalti la wrapper-on (sencimigo / plene passwordless)
+- `ADGUARD_SUDO_ASKPASS=0` — teni la wrapper-on sed neniam peti pasvorton; nur `sudo -n` (por passwordless sudoers)
 
 ## Funkcioj
 
