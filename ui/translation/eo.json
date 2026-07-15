@@ -97,6 +97,8 @@
     },
     "tray.menu.off": "MALŜ",
     "tray.menu.quit": "Eliri",
+    "tray.menu.quit.confirm.message": "Ĉu vi certas, ke vi volas eliri?",
+    "tray.menu.quit.confirm.title": "Eliri",
     "tray.menu.show_dashboard": "Montri panelon",
     "tray.menu.vpn_connected": "VPN konektita",
     "tray.menu.vpn_disconnected": "VPN malkonektita",

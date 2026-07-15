@@ -68,6 +68,8 @@
     },
     "tray.menu.off": "OFF",
     "tray.menu.quit": "Quit",
+    "tray.menu.quit.confirm.message": "Are you sure you want to quit?",
+    "tray.menu.quit.confirm.title": "Quit",
     "tray.menu.show_dashboard": "Show dashboard",
     "tray.menu.vpn_connected": "VPN connected",
     "tray.menu.vpn_disconnected": "VPN disconnected",

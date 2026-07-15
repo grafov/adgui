@@ -74,6 +74,8 @@
     },
     "tray.menu.off": "ВЫКЛ",
     "tray.menu.quit": "Выход",
+    "tray.menu.quit.confirm.message": "Действительно выйти?",
+    "tray.menu.quit.confirm.title": "Выход",
     "tray.menu.show_dashboard": "Показать панель",
     "tray.menu.vpn_connected": "VPN подключён",
     "tray.menu.vpn_disconnected": "VPN отключён",

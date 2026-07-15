@@ -80,6 +80,9 @@ func (u *UI) showSudoPasswordDialog(resultCh chan<- sudoPromptResult) {
 		},
 		window,
 	)
+	passEntry.OnSubmitted = func(_ string) {
+		d.Confirm()
+	}
 	d.Resize(fyne.NewSize(420, d.MinSize().Height+8))
 	d.Show()
 	window.Canvas().Focus(passEntry)

@@ -193,9 +193,27 @@ func (u *UI) createTrayMenu() {
 		u.runPrivileged(func() { u.vpnmgr.Disconnect() })
 	})
 	quitItem := fyne.NewMenuItem(lang.X("tray.menu.quit", "Quit"), func() {
-		u.stopPasteWatcher()
-		_ = u.vpnmgr.Close()
-		u.Fyne.Quit()
+		parent := u.activeWindow()
+		usedPrompt := parent == u.promptWindow
+		if usedPrompt {
+			parent.SetTitle(lang.X("tray.menu.quit.confirm.title", "Quit"))
+		}
+		dialog.ShowConfirm(
+			lang.X("tray.menu.quit.confirm.title", "Quit"),
+			lang.X("tray.menu.quit.confirm.message", "Are you sure you want to quit?"),
+			func(ok bool) {
+				if usedPrompt && u.promptWindow != nil {
+					u.promptWindow.Hide()
+				}
+				if !ok {
+					return
+				}
+				u.stopPasteWatcher()
+				_ = u.vpnmgr.Close()
+				u.Fyne.Quit()
+			},
+			parent,
+		)
 	})
 	quitItem.IsQuit = true
 	domains := fyne.NewMenuItem(domainsMenuLabel(u.getDomainsCount()), func() {
