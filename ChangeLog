@@ -1,3 +1,35 @@
+2026-07-16  Alexander I.Grafov  <grafov@inet.name>
+
+	Version 0.4.0
+
+	* config/config.go, cmd/adgui/main.go: config file created automatically
+	  on first launch with localized defaults and commented keys.
+	* config/config.go: environment variables now take priority over config
+	  values; code defaults used when neither is set
+	  (ADGUARD_CMD, ADGUARD_KILL_CMD, ADGUARD_SUDO_WRAP, ADGUARD_SUDO_ASKPASS).
+	* README.md, README.ru.md, README.eo.md: updated highlights section with
+	  feature summary and native GUI description.
+
+2026-07-15  Alexander I.Grafov  <grafov@inet.name>
+
+	Version 0.3.0
+
+	* commands/sudowrap/sudowrap.go, ui/sudo_prompt.go: when TUN mode
+	  requires root, adgui now injects an isolated sudo wrapper with askpass
+	  support (ADGUARD_SUDO_ASKPASS=1); password stored in .pass (mode 0600)
+	  and wiped on exit; falls back to sudo -n when no ticket is cached.
+	* commands/sudowrap/sudowrap.go: added ADGUARD_SUDO_ASKPASS config key to
+	  disable the password dialog entirely (keep only sudo -n).
+	* ui/ui.go: added quit confirmation dialog to prevent accidental exit.
+	* res/adguardvpn-gui.svg: added project logo and embedded in README files.
+	* README.eo.md, README.ru.md: added Esperanto and Russian translations.
+	* All source files: added GPL license headers.
+	* ui/about_panel.go: added license information and project URL.
+	* README.md, README.ru.md, README.eo.md: added YouTube demo link and
+	  adguardvpn-cli prerequisite note.
+	* Makefile: Wayland builds now use correct build tags.
+	* Makefile, adgui-run: renamed X11 references to XLibre.
+
 2026-06-22  Alexander I.Grafov  <grafov@inet.name>
 
 	Version 0.2.0
