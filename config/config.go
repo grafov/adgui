@@ -100,35 +100,35 @@ func buildAdguircTemplate(headerComment string, keyComments map[string]string) s
 	return b.String()
 }
 
-// AdguardCmd resolves ADGUARD_CMD from adguirc, then environment, then code default.
+// AdguardCmd resolves ADGUARD_CMD from environment, then adguirc, then code default.
 func AdguardCmd() (string, error) {
 	return stringConfig(keyAdguardCmd, defaultAdguardCmd)
 }
 
 // AdguardSudoWrapEnabled reports whether adgui should inject the private sudo PATH wrapper.
-// Default is true. Set ADGUARD_SUDO_WRAP=0/false/no in adguirc or environment to disable.
+// Default is true. Set ADGUARD_SUDO_WRAP=0/false/no in environment or adguirc to disable.
 func AdguardSudoWrapEnabled() (bool, error) {
 	return boolConfigDefaultTrue(keyAdguardSudoWrap)
 }
 
 // AdguardSudoAskpassEnabled reports whether adgui should collect a sudo password via GUI
 // askpass for privileged CLI operations. Default is true.
-// Set ADGUARD_SUDO_ASKPASS=0/false/no in adguirc or environment to disable (passwordless sudo).
+// Set ADGUARD_SUDO_ASKPASS=0/false/no in environment or adguirc to disable (passwordless sudo).
 func AdguardSudoAskpassEnabled() (bool, error) {
 	return boolConfigDefaultTrue(keyAdguardSudoAskpass)
 }
 
 func boolConfigDefaultTrue(key string) (bool, error) {
+	if env := strings.TrimSpace(os.Getenv(key)); env != "" {
+		return parseBoolDefaultTrue(env), nil
+	}
+
 	fileValue, err := stringValueFromFile(key)
 	if err != nil {
 		return true, err
 	}
 	if fileValue != "" {
 		return parseBoolDefaultTrue(fileValue), nil
-	}
-
-	if env := strings.TrimSpace(os.Getenv(key)); env != "" {
-		return parseBoolDefaultTrue(env), nil
 	}
 
 	return true, nil
@@ -143,23 +143,23 @@ func parseBoolDefaultTrue(value string) bool {
 	}
 }
 
-// AdguardKillCmd resolves ADGUARD_KILL_CMD from adguirc, then environment.
+// AdguardKillCmd resolves ADGUARD_KILL_CMD from environment, then adguirc.
 // An empty result means the caller should use the standard process kill path.
 func AdguardKillCmd() (string, error) {
 	return stringConfig(keyAdguardKillCmd, "")
 }
 
 func stringConfig(key, defaultValue string) (string, error) {
+	if env := strings.TrimSpace(os.Getenv(key)); env != "" {
+		return env, nil
+	}
+
 	fileValue, err := stringValueFromFile(key)
 	if err != nil {
 		return defaultValue, err
 	}
 	if fileValue != "" {
 		return fileValue, nil
-	}
-
-	if env := strings.TrimSpace(os.Getenv(key)); env != "" {
-		return env, nil
 	}
 
 	return defaultValue, nil
@@ -180,6 +180,11 @@ func stringValueFromFile(key string) (string, error) {
 	}
 
 	return strings.TrimSpace(cfg.Section("").Key(key).String()), nil
+}
+
+// AdguircPath returns the absolute path to the adguirc file.
+func AdguircPath() (string, error) {
+	return configPath()
 }
 
 func configPath() (string, error) {

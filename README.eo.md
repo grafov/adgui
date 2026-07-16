@@ -56,7 +56,7 @@ En `~/.config/adgui/adguirc` vi povas agordi (je unua lanĉo adgui kreas tiun ŝ
 - `ADGUARD_SUDO_WRAP=0` — tute malŝalti la wrapper-on (sencimigo / plene passwordless)
 - `ADGUARD_SUDO_ASKPASS=0` — teni la wrapper-on sed neniam peti pasvorton; nur `sudo -n` (por passwordless sudoers)
 
-Prioritato: aktiva ŝlosilo en `adguirc` → medio-variablo → defaŭlta valoro en la kodo.
+Prioritato: medio-variablo → aktiva ŝlosilo en `adguirc` → defaŭlta valoro en la kodo.
 
 ## Funkcioj
 

@@ -122,7 +122,7 @@ func TestAdguardCmdEnvFallback(t *testing.T) {
 	}
 }
 
-func TestAdguardCmdFileOverridesEnv(t *testing.T) {
+func TestAdguardCmdEnvOverridesFile(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("ADGUARD_CMD", "/env/adguardvpn-cli")
@@ -133,12 +133,12 @@ func TestAdguardCmdFileOverridesEnv(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cmd != "/file/adguardvpn-cli" {
-		t.Fatalf("expected file value, got %q", cmd)
+	if cmd != "/env/adguardvpn-cli" {
+		t.Fatalf("expected env value, got %q", cmd)
 	}
 }
 
-func TestAdguardKillCmdFileEnvPriority(t *testing.T) {
+func TestAdguardKillCmdEnvOverridesFile(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("ADGUARD_KILL_CMD", "env-kill")
@@ -149,8 +149,8 @@ func TestAdguardKillCmdFileEnvPriority(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cmd != "file-kill" {
-		t.Fatalf("expected file value, got %q", cmd)
+	if cmd != "env-kill" {
+		t.Fatalf("expected env value, got %q", cmd)
 	}
 }
 
@@ -198,7 +198,7 @@ func TestAdguardSudoWrapEnabledConfigFile(t *testing.T) {
 	}
 }
 
-func TestAdguardSudoWrapEnabledFileOverridesEnv(t *testing.T) {
+func TestAdguardSudoWrapEnabledEnvOverridesFile(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("ADGUARD_SUDO_WRAP", "1")
@@ -209,8 +209,8 @@ func TestAdguardSudoWrapEnabledFileOverridesEnv(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if enabled {
-		t.Fatal("expected sudo wrap disabled from config over env")
+	if !enabled {
+		t.Fatal("expected sudo wrap enabled from env over config")
 	}
 }
 

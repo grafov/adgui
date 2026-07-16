@@ -38,8 +38,8 @@ func main() {
 			"config.adguirc.header",
 			"This config was created by adgui with default values.\n"+
 				"Uncomment the keys and set the values you need.\n"+
-				"If a variable is not in this file, it is read from the environment.\n"+
-				"If it is also missing from the environment, the default value from the code is used.",
+				"Environment variables override values in this file.\n"+
+				"If a variable is missing from both the environment and this file, the default value from the code is used.",
 		),
 		map[string]string{
 			"ADGUARD_CMD": lang.X(

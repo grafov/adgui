@@ -56,7 +56,7 @@ In `~/.config/adgui/adguirc` you can set (on first launch adgui creates this tem
 - `ADGUARD_SUDO_WRAP=0` — disable the wrapper entirely (debugging / fully passwordless setups)
 - `ADGUARD_SUDO_ASKPASS=0` — keep the wrapper but never prompt for a password; only `sudo -n` (for passwordless sudoers)
 
-Priority: active key in `adguirc` → environment variable → code default.
+Priority: environment variable → active key in `adguirc` → code default.
 
 ## Features
 

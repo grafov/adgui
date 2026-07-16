@@ -148,11 +148,20 @@ var _ = Describe("Command Queue Tracking and Killing", func() {
 	Context("when sudo wrapper is enabled", func() {
 		var (
 			tempScriptPath string
+			tempHome       string
 			oldAdguardCmd  string
 			oldSudoWrap    string
+			oldSudoAskpass string
+			oldHome        string
 		)
 
 		BeforeEach(func() {
+			var err error
+			tempHome, err = os.MkdirTemp("", "adgui-sudo-wrap-home-*")
+			Expect(err).NotTo(HaveOccurred())
+			oldHome = os.Getenv("HOME")
+			Expect(os.Setenv("HOME", tempHome)).To(Succeed())
+
 			f, err := os.CreateTemp("", "fake-adguard-wrap-*.sh")
 			Expect(err).NotTo(HaveOccurred())
 			script := "#!/bin/sh\n" +
@@ -170,8 +179,10 @@ var _ = Describe("Command Queue Tracking and Killing", func() {
 
 			oldAdguardCmd = os.Getenv("ADGUARD_CMD")
 			oldSudoWrap = os.Getenv("ADGUARD_SUDO_WRAP")
+			oldSudoAskpass = os.Getenv("ADGUARD_SUDO_ASKPASS")
 			Expect(os.Setenv("ADGUARD_CMD", tempScriptPath)).To(Succeed())
 			Expect(os.Setenv("ADGUARD_SUDO_WRAP", "1")).To(Succeed())
+			Expect(os.Setenv("ADGUARD_SUDO_ASKPASS", "1")).To(Succeed())
 		})
 
 		AfterEach(func() {
@@ -185,7 +196,18 @@ var _ = Describe("Command Queue Tracking and Killing", func() {
 			} else {
 				_ = os.Unsetenv("ADGUARD_SUDO_WRAP")
 			}
+			if oldSudoAskpass != "" {
+				_ = os.Setenv("ADGUARD_SUDO_ASKPASS", oldSudoAskpass)
+			} else {
+				_ = os.Unsetenv("ADGUARD_SUDO_ASKPASS")
+			}
+			if oldHome != "" {
+				_ = os.Setenv("HOME", oldHome)
+			} else {
+				_ = os.Unsetenv("HOME")
+			}
 			_ = os.Remove(tempScriptPath)
+			_ = os.RemoveAll(tempHome)
 		})
 
 		It("should inject private sudo wrapper only into child CLI environment", func() {

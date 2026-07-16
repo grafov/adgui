@@ -16,6 +16,8 @@
 package ui
 
 import (
+	"adgui/config"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/lang"
@@ -37,12 +39,21 @@ func (u *UI) aboutPanel(appVersion string) *fyne.Container {
 	header.TextStyle.Bold = true
 
 	ipLabel := widget.NewLabel(lang.X("about.ipregion", "IP region checks ported from Davoyan/ipregion (MIT)"))
-	urlLabel := widget.NewLabel("https://github.com/grafov/adgui")
+	urlLabel := widget.NewLabel(lang.X("about.source", "Source code: https://github.com/grafov/adgui"))
+
+	configLabel := widget.NewLabel(lang.X("about.config", "Customize adgui with variables in the configuration file:"))
+	configPathText := "~/.config/adgui/adguirc"
+	if path, err := config.AdguircPath(); err == nil {
+		configPathText = path
+	}
+	configPathLabel := widget.NewLabel(configPathText)
 
 	return container.NewVBox(
 		header,
 		adguiLabel,
 		cliLabel,
+		configLabel,
+		configPathLabel,
 		ipLabel,
 		urlLabel,
 	)
