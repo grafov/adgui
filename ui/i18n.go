@@ -28,8 +28,13 @@ var translationsFS embed.FS
 // TranslationsFS exposes embedded translation files for tests.
 var TranslationsFS = translationsFS
 
-func loadTranslations() error {
+// LoadTranslations registers embedded UI translation catalogs with Fyne.
+func LoadTranslations() error {
 	return lang.AddTranslationsFS(translationsFS, "translation")
+}
+
+func loadTranslations() error {
+	return LoadTranslations()
 }
 
 // TranslationCatalogs returns raw JSON catalogs keyed by locale tag.

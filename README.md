@@ -49,12 +49,14 @@ Or use `PREFIX` for installing to another directory, for example under home:
 
 adgui passes a minimal desktop/XDG environment to the CLI (user, locale, display/session vars) and starts `adguardvpn-cli` without a controlling terminal, so `sudo` cannot ask for a password in the terminal that launched adgui. When a runtime `.pass` file exists, the wrapper uses askpass (`sudo -A`); otherwise it runs non-interactive `sudo -n` on the real command (credential cache and NOPASSWD, including command-specific rules). adgui shows a password dialog only when askpass is enabled and there is no valid ticket; the password is stored in `.pass` (mode `0600`) and wiped on exit.
 
-In `~/.config/adgui/adguirc` you can set:
+In `~/.config/adgui/adguirc` you can set (on first launch adgui creates this template file with commented keys and default values):
 
-- `ADGUARD_CMD` — path to `adguardvpn-cli`
+- `ADGUARD_CMD` — path to `adguardvpn-cli` (default: `adguardvpn-cli`)
 - `ADGUARD_KILL_CMD` — non-interactive kill prefix (e.g. `/usr/bin/sudo -n kill -TERM`)
 - `ADGUARD_SUDO_WRAP=0` — disable the wrapper entirely (debugging / fully passwordless setups)
 - `ADGUARD_SUDO_ASKPASS=0` — keep the wrapper but never prompt for a password; only `sudo -n` (for passwordless sudoers)
+
+Priority: active key in `adguirc` → environment variable → code default.
 
 ## Features
 
@@ -171,6 +173,22 @@ If the file or a key is missing, built-in demo defaults are used where available
 ## AI code
 
 I actively use LLMs for generating large parts of code, tests, code review, localization and documentation for this project. It was an experiment to create a GUI (using the Fyne framework) in Go with LLMs. Mostly successful, though I needed to fix some parts manually. All the code reviewed by me.
+
+What was done by LLM?
+- generating code for planned features
+- debugging code
+- generating tests
+- writing documentation
+- localization into other languages
+
+What was done by a human?
+- choosing architectural decisions
+- code review
+- refactoring code after unsuitable LLM choices
+- adjusting code style to follow Go conventions
+- adjusting documentation style
+- small fixes in localizations
+- debugging of hard cases where LLM was failed
 
 ## Starware
 

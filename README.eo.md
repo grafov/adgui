@@ -49,12 +49,14 @@ Aŭ uzu `PREFIX` por instali en alian dosierujon, ekzemple hejme:
 
 adgui transdonas al la CLI minimuman desktop/XDG-medion (uzanto, lokalo, display/session) kaj lanĉas `adguardvpn-cli` sen controlling terminal, por ke `sudo` ne petu pasvorton en la terminalo, kiu startigis adgui. Se ekzistas rultempa `.pass`, la wrapper uzas askpass (`sudo -A`); alie ĝi rulas neinteragan `sudo -n` sur la reala komando (kaŝmemoro de credentials kaj NOPASSWD, inkluzive komando-specifajn regulojn). adgui montras pasvortan dialogon nur kiam askpass estas ŝaltita kaj ne ekzistas valida bileto; la pasvorto estas konservita en `.pass` (reĝimo `0600`) kaj forviŝita ĉe eliro.
 
-En `~/.config/adgui/adguirc` vi povas agordi:
+En `~/.config/adgui/adguirc` vi povas agordi (je unua lanĉo adgui kreas tiun ŝablonan dosieron kun kommentitaj ŝlosiloj kaj defaŭltaj valoroj):
 
-- `ADGUARD_CMD` — vojo al `adguardvpn-cli`
+- `ADGUARD_CMD` — vojo al `adguardvpn-cli` (defaŭlte: `adguardvpn-cli`)
 - `ADGUARD_KILL_CMD` — neinteraga kill-komando (ekz. `/usr/bin/sudo -n kill -TERM`)
 - `ADGUARD_SUDO_WRAP=0` — tute malŝalti la wrapper-on (sencimigo / plene passwordless)
 - `ADGUARD_SUDO_ASKPASS=0` — teni la wrapper-on sed neniam peti pasvorton; nur `sudo -n` (por passwordless sudoers)
+
+Prioritato: aktiva ŝlosilo en `adguirc` → medio-variablo → defaŭlta valoro en la kodo.
 
 ## Funkcioj
 
@@ -171,6 +173,22 @@ Se la dosiero aŭ ŝlosilo mankas, enkonstruitaj demonstraj defaŭltoj estas uza
 ## Kodo per AI
 
 Mi aktive uzas LLM-ojn por generi grandajn partojn de kodo, testoj, kodrecenzo, lokalizado kaj dokumentado por ĉi tiu projekto. Ĝi estis eksperimento krei GUI (per la Fyne-kadro) en Go per LLM-oj. Ĝenerale sukcesa, kvankam mi devis permane korekti iujn partojn. La tuta kodo estas recenzita de mi.
+
+Kio estis farita per LLM?
+- genero de kodo por planitaj funkcioj
+- sencimigo de kodo
+- genero de testoj
+- verkado de dokumentado
+- lokalizado al aliaj lingvoj
+
+Kio estis farita de homo?
+- elekto de arkitekturaj decidoj
+- kodrecenzo
+- refaktorado de kodo post malsukcesaj LLM-solvoj
+- ĝustigoj de koda stilo por sekvi Go-konvenciojn
+- ĝustigoj de dokumentada stilo
+- malgrandaj ĝustigoj en lokalizoj
+- sencimigo de malfacilaj kazoj, kie LLM malsukcesis
 
 ## Starware
 

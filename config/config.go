@@ -27,31 +27,82 @@ import (
 const (
 	configDirName         = "adgui"
 	configFileName        = "adguirc"
+	defaultAdguardCmd     = "adguardvpn-cli"
 	keyAdguardCmd         = "ADGUARD_CMD"
 	keyAdguardKillCmd     = "ADGUARD_KILL_CMD"
 	keyAdguardSudoWrap    = "ADGUARD_SUDO_WRAP"
 	keyAdguardSudoAskpass = "ADGUARD_SUDO_ASKPASS"
 )
 
-// AdguardCmd reads ~/.config/adgui/adguirc (INI) and returns the ADGUARD_CMD value.
-// It returns an empty string when the file is missing or the key is not set.
-// Any other read or parse error is returned to the caller.
-func AdguardCmd() (string, error) {
-	configPath, err := configPath()
+// EnsureAdguirc creates ~/.config/adgui/adguirc when it is missing.
+// The file contains a localized header comment and all known keys with default
+// values, each preceded by a localized description and commented out with #.
+// keyComments maps ADGUARD_* keys to one-line descriptions already localized by the caller.
+// An existing file is never modified.
+func EnsureAdguirc(headerComment string, keyComments map[string]string) error {
+	path, err := configPath()
 	if err != nil {
-		return "", err
+		return err
 	}
 
-	cfg, err := ini.Load(configPath)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return "", nil
+	if _, err := os.Stat(path); err == nil {
+		return nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+
+	return os.WriteFile(path, []byte(buildAdguircTemplate(headerComment, keyComments)), 0o644)
+}
+
+func buildAdguircTemplate(headerComment string, keyComments map[string]string) string {
+	var b strings.Builder
+
+	for _, line := range strings.Split(headerComment, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			b.WriteByte('\n')
+			continue
 		}
-		return "", err
+		if !strings.HasPrefix(line, "#") {
+			line = "# " + line
+		}
+		b.WriteString(line)
+		b.WriteByte('\n')
+	}
+	b.WriteByte('\n')
+
+	defaults := []struct {
+		key   string
+		value string
+	}{
+		{keyAdguardCmd, defaultAdguardCmd},
+		{keyAdguardKillCmd, ""},
+		{keyAdguardSudoWrap, "true"},
+		{keyAdguardSudoAskpass, "true"},
+	}
+	for _, item := range defaults {
+		if comment := strings.TrimSpace(keyComments[item.key]); comment != "" {
+			if !strings.HasPrefix(comment, "#") {
+				comment = "# " + comment
+			}
+			b.WriteString(comment)
+			b.WriteByte('\n')
+		}
+		b.WriteString("# " + item.key + "=" + item.value + "\n")
+		b.WriteByte('\n')
 	}
 
-	value := strings.TrimSpace(cfg.Section("").Key(keyAdguardCmd).String())
-	return value, nil
+	return b.String()
+}
+
+// AdguardCmd resolves ADGUARD_CMD from adguirc, then environment, then code default.
+func AdguardCmd() (string, error) {
+	return stringConfig(keyAdguardCmd, defaultAdguardCmd)
 }
 
 // AdguardSudoWrapEnabled reports whether adgui should inject the private sudo PATH wrapper.
@@ -68,28 +119,19 @@ func AdguardSudoAskpassEnabled() (bool, error) {
 }
 
 func boolConfigDefaultTrue(key string) (bool, error) {
+	fileValue, err := stringValueFromFile(key)
+	if err != nil {
+		return true, err
+	}
+	if fileValue != "" {
+		return parseBoolDefaultTrue(fileValue), nil
+	}
+
 	if env := strings.TrimSpace(os.Getenv(key)); env != "" {
 		return parseBoolDefaultTrue(env), nil
 	}
 
-	configPath, err := configPath()
-	if err != nil {
-		return true, err
-	}
-
-	cfg, err := ini.Load(configPath)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return true, nil
-		}
-		return true, err
-	}
-
-	value := strings.TrimSpace(cfg.Section("").Key(key).String())
-	if value == "" {
-		return true, nil
-	}
-	return parseBoolDefaultTrue(value), nil
+	return true, nil
 }
 
 func parseBoolDefaultTrue(value string) bool {
@@ -101,10 +143,29 @@ func parseBoolDefaultTrue(value string) bool {
 	}
 }
 
-// AdguardKillCmd reads ~/.config/adgui/adguirc (INI) and returns the ADGUARD_KILL_CMD value.
-// It returns an empty string when the file is missing or the key is not set.
-// Any other read or parse error is returned to the caller.
+// AdguardKillCmd resolves ADGUARD_KILL_CMD from adguirc, then environment.
+// An empty result means the caller should use the standard process kill path.
 func AdguardKillCmd() (string, error) {
+	return stringConfig(keyAdguardKillCmd, "")
+}
+
+func stringConfig(key, defaultValue string) (string, error) {
+	fileValue, err := stringValueFromFile(key)
+	if err != nil {
+		return defaultValue, err
+	}
+	if fileValue != "" {
+		return fileValue, nil
+	}
+
+	if env := strings.TrimSpace(os.Getenv(key)); env != "" {
+		return env, nil
+	}
+
+	return defaultValue, nil
+}
+
+func stringValueFromFile(key string) (string, error) {
 	configPath, err := configPath()
 	if err != nil {
 		return "", err
@@ -118,8 +179,7 @@ func AdguardKillCmd() (string, error) {
 		return "", err
 	}
 
-	value := strings.TrimSpace(cfg.Section("").Key(keyAdguardKillCmd).String())
-	return value, nil
+	return strings.TrimSpace(cfg.Section("").Key(key).String()), nil
 }
 
 func configPath() (string, error) {

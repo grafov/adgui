@@ -17,7 +17,11 @@ package main
 
 import (
 	"adgui/commands"
+	"adgui/config"
 	"adgui/ui"
+
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/lang"
 )
 
 var (
@@ -26,6 +30,39 @@ var (
 )
 
 func main() {
+	if err := ui.LoadTranslations(); err != nil {
+		fyne.LogError("failed to load translations", err)
+	}
+	if err := config.EnsureAdguirc(
+		lang.X(
+			"config.adguirc.header",
+			"This config was created by adgui with default values.\n"+
+				"Uncomment the keys and set the values you need.\n"+
+				"If a variable is not in this file, it is read from the environment.\n"+
+				"If it is also missing from the environment, the default value from the code is used.",
+		),
+		map[string]string{
+			"ADGUARD_CMD": lang.X(
+				"config.adguirc.ADGUARD_CMD",
+				"Path to adguardvpn-cli. Example: /usr/bin/adguardvpn-cli",
+			),
+			"ADGUARD_KILL_CMD": lang.X(
+				"config.adguirc.ADGUARD_KILL_CMD",
+				"Optional kill command prefix; PID is appended. Example: /usr/bin/sudo -n kill -TERM. Empty uses SIGTERM/Kill.",
+			),
+			"ADGUARD_SUDO_WRAP": lang.X(
+				"config.adguirc.ADGUARD_SUDO_WRAP",
+				"Inject private sudo PATH wrapper. Values: true, false (also 1/0, yes/no, on/off).",
+			),
+			"ADGUARD_SUDO_ASKPASS": lang.X(
+				"config.adguirc.ADGUARD_SUDO_ASKPASS",
+				"Show GUI sudo password dialog. Values: true, false (also 1/0, yes/no, on/off).",
+			),
+		},
+	); err != nil {
+		fyne.LogError("failed to create config file", err)
+	}
+
 	appLogic := commands.New()
 	appUI := ui.New(appLogic, version)
 	_ = gitCommit

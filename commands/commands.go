@@ -391,9 +391,6 @@ func (v *VPNManager) KillCommand(id uint64) error {
 	if err != nil {
 		fmt.Printf("Config read error for kill cmd: %v\n", err)
 	}
-	if killCmdStr == "" {
-		killCmdStr = os.Getenv("ADGUARD_KILL_CMD")
-	}
 
 	if killCmdStr != "" {
 		fields := strings.Fields(killCmdStr)
@@ -441,12 +438,7 @@ func resolveCommandPath() string {
 	cmdPath, err := config.AdguardCmd()
 	if err != nil {
 		fmt.Printf("Config read error: %v\n", err)
-	}
-	if cmdPath == "" {
-		cmdPath = os.Getenv("ADGUARD_CMD")
-	}
-	if cmdPath == "" {
-		cmdPath = "adguardvpn-cli"
+		return "adguardvpn-cli"
 	}
 	return cmdPath
 }
