@@ -4,17 +4,14 @@
 
 **Languages:** [English](README.md) · [Русский](README.ru.md) · [Esperanto](README.eo.md)
 
-Simple GUI to control the CLI for AdGuard VPN on Linux desktop (XLibre/X11 or Wayland).
+Native desktop GUI (Go + Fyne) for AdGuard VPN on Linux — Wayland or XLibre/X11.
+Not a web page in a browser: a real windowed app that talks to `adguardvpn-cli`.
 AdGuard officially offers GUIs for Mac, Android, and Windows, but Linux is missing one :(
 
 > The project doesn't offer VPN functionality. This is just a helper UI that wraps
 > the real VPN application (`adguardvpn-cli`) for more comfortable use in a
 > desktop environment. The project has no relation to Adguard or any of their
 > products.
-
-The GUI closely resembles the features offered by AdGuard VPN on Linux. Sadly,
-the Linux version of AdGuard VPN has fewer features than its counterparts on
-Mac/Windows.
 
 Work in progress but the application is fully functional.
 
@@ -23,6 +20,13 @@ Work in progress but the application is fully functional.
 ![region check](doc/scr1.png)
 
 Short [demo on Youtube](https://www.youtube.com/shorts/UpstI1BD-rE).
+
+## Highlights
+
+- **Native Linux app** — runs on Wayland or XLibre/X11 as a real desktop window, not JS in a browser
+- **adguardvpn-cli features** — manage site exclusions (general/selective), connect from the location list, tray actions for connect/disconnect
+- **IP region check** — see how GeoIP services classify your egress IP; this check is not part of the CLI
+- **sudo for TUN** — works with the privileged `sudo` flow that `adguardvpn-cli` needs in TUN mode (askpass dialog or passwordless `sudo -n`)
 
 ## Localization
 

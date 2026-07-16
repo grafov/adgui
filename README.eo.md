@@ -4,17 +4,14 @@
 
 **Languages:** [English](README.md) · [Русский](README.ru.md) · [Esperanto](README.eo.md)
 
-Simpla grafika interfaco por regi la CLI de AdGuard VPN sur Linux-surtableto (XLibre/X11 aŭ Wayland).
-AdGuard oficiala ofertas GUI-ojn por Mac, Android kaj Windows, sed por Linux mankas ĝi :(
+Native surtabla GUI (Go + Fyne) por AdGuard VPN sur Linux — Wayland aŭ XLibre/X11.
+Ne retpaĝo en retumilo: vera fenestra aplikaĵo, kiu regas `adguardvpn-cli`.
+AdGuard oficiale ofertas GUI-ojn por Mac, Android kaj Windows, sed por Linux mankas ĝi :(
 
 > La projekto ne provizas VPN-funkcion. Ĉi tio estas nur helpa interfaco, kiu ĉirkaŭas
 > la veran VPN-aplikaĵon (`adguardvpn-cli`) por pli komforta uzo en
 > surtabla medio. La projekto ne havas rilaton al AdGuard nek al iu el iliaj
 > produktoj.
-
-La GUI proksime imitas la funkciojn de AdGuard VPN sur Linux. Bedaŭrinde,
-la Linux-versio de AdGuard VPN havas malpli da funkcioj ol la samaj por
-Mac/Windows.
 
 Laboro daŭras, sed la aplikaĵo estas plene funkcia.
 
@@ -23,6 +20,13 @@ Laboro daŭras, sed la aplikaĵo estas plene funkcia.
 ![regiona kontrolo](doc/scr1.png)
 
 Mallonga [demonstrado en Youtube](https://www.youtube.com/shorts/UpstI1BD-rE).
+
+## Ĉefaj trajtoj
+
+- **Native Linux-aplikaĵo** — funkcias sur Wayland aŭ XLibre/X11 kiel vera fenestro, ne JS en retumilo
+- **Funkcioj de adguardvpn-cli** — administrado de retejaj ekskluzivoj (ĝenerala/selektiva), konekto el listo de lokoj, taskopleto por konekti/malkonekti
+- **Kontrolo de IP-regiono** — kiel GeoIP-servoj klasifikas vian eliran IP; tiu kontrolo ne estas en la CLI
+- **sudo por TUN** — subtenas la privilegiitan `sudo`-fluon, kiun `adguardvpn-cli` bezonas en TUN-reĝimo (askpass-dialogo aŭ passwordless `sudo -n`)
 
 ## Lokalizado
 
