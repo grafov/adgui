@@ -37,9 +37,21 @@ Other languages could be added later.
 
 > You should provide `adguardvpn-cli` installed somewhere in the PATH.
 
-No binaries provided at the moment. You should need to have Golang development environment on your machine.
+### Prebuilt binaries (Linux amd64)
 
-It tries to install into protected directory `/usr/local/bin` that requires root privileges. Use "sudo", "doas" or other appropriate command with SUDO environvent dir:
+Download the latest `.tar.xz` from [Releases](https://github.com/grafov/adgui/releases), unpack it, and run:
+
+```bash
+tar -xJf adgui-*-linux-amd64.tar.xz
+cd adgui-*-linux-amd64
+./adgui
+```
+
+The archive contains `adgui-xlibre`, `adgui-wayland`, and the `adgui` launcher (picks Wayland or X11 automatically).
+
+### Build from source
+
+Requires a Go toolchain. Install into `/usr/local/bin` (needs root) with "sudo", "doas", or another privilege helper via `SUDO`:
 
 `SUDO=sudo make install`
 

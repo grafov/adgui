@@ -37,9 +37,21 @@
 
 > Предварительно должен быть установлен `adguardvpn-cli` где-нибудь в PATH.
 
-Готовых бинарников пока нет. На машине должна быть установлена среда разработки на Golang.
+### Готовые бинарники (Linux amd64)
 
-По умолчанию установка идёт в защищённый каталог `/usr/local/bin`, для чего нужны права root. Используйте `sudo`, `doas` или другую подходящую команду через переменную окружения SUDO:
+Скачайте последний `.tar.xz` со страницы [Releases](https://github.com/grafov/adgui/releases), распакуйте и запустите:
+
+```bash
+tar -xJf adgui-*-linux-amd64.tar.xz
+cd adgui-*-linux-amd64
+./adgui
+```
+
+В архиве: `adgui-xlibre`, `adgui-wayland` и лаунчер `adgui` (сам выбирает Wayland или X11).
+
+### Сборка из исходников
+
+Нужна среда разработки на Go. Установка в `/usr/local/bin` (нужен root) через `sudo`, `doas` или другую команду в переменной `SUDO`:
 
 `SUDO=sudo make install`
 

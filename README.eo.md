@@ -37,9 +37,21 @@ Aliaj lingvoj povas esti aldonitaj poste.
 
 > Anticipe vi devas instali `adguardvpn-cli` ie en la PATH.
 
-Nuntempe ne proviziĝas duumaj dosieroj. Sur via maŝino devus esti Go-programada medio.
+### Antaŭkompilaj duumaj dosieroj (Linux amd64)
 
-Ĝi provas instali en la protektitan dosierujon `/usr/local/bin`, kio postulas root-privilegiojn. Uzu `sudo`, `doas` aŭ alian taŭgan komandon per la SUDO-medio:
+Elŝutu la lastan `.tar.xz` de [Releases](https://github.com/grafov/adgui/releases), malpaku ĝin kaj rulu:
+
+```bash
+tar -xJf adgui-*-linux-amd64.tar.xz
+cd adgui-*-linux-amd64
+./adgui
+```
+
+La arkivo enhavas `adgui-xlibre`, `adgui-wayland` kaj la lanĉilon `adgui` (aŭtomate elektas Wayland aŭ X11).
+
+### Kompili el fonto
+
+Necesas Go-programada medio. Instalu en `/usr/local/bin` (bezonas root) per `sudo`, `doas` aŭ alia privilegia helpilo per `SUDO`:
 
 `SUDO=sudo make install`
 

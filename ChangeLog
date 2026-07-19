@@ -1,3 +1,14 @@
+2026-07-19  Alexander I.Grafov  <grafov@inet.name>
+
+	* adgui: renamed launcher script from adgui-run to adgui (portable
+	  lookup next to the script, fallback /usr/local/bin).
+	* Makefile: added `make dist` for Linux amd64 .tar.xz + sha256;
+	  install/dist use the adgui launcher name.
+	* .github/workflows/release.yml: build and publish Linux amd64
+	  archives to GitHub Releases on v* tags.
+	* README.md, README.ru.md, README.eo.md: document prebuilt binaries
+	  from Releases and the adgui launcher.
+
 2026-07-16  Alexander I.Grafov  <grafov@inet.name>
 
 	Version 0.4.0

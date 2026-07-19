@@ -1,0 +1,37 @@
+#!/bin/bash
+# Run only one instance at a time. Restart when another instance is found.
+#
+# Looks for binaries next to this script (portable archive / PREFIX install),
+# then falls back to /usr/local/bin.
+#
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+PREFIX_DIR=/usr/local/bin
+
+resolve_binary() {
+	local name=$1
+	if [[ -x "${SCRIPT_DIR}/${name}" ]]; then
+		echo "${SCRIPT_DIR}/${name}"
+	elif [[ -x "${PREFIX_DIR}/${name}" ]]; then
+		echo "${PREFIX_DIR}/${name}"
+	else
+		echo "${SCRIPT_DIR}/${name}"
+	fi
+}
+
+# Prefer X11/XLibre; switch when a Wayland session is active.
+name=adgui-xlibre
+if [[ -n "$WAYLAND_DISPLAY" || "$XDG_SESSION_TYPE" == "wayland" ]]; then
+	name=adgui-wayland
+fi
+
+binary=$(resolve_binary "$name")
+
+# Stop any previous adgui instance (either install layout).
+pids=$(ps x | grep -E '[/]adgui-(wayland|xlibre)$' | awk '{print $1}')
+if [[ -n "$pids" ]]; then
+	# shellcheck disable=SC2086
+	kill $pids 2>/dev/null
+fi
+
+exec "$binary" "$@"
+# ^^^ optionally add for debug: >/tmp/adgui.log 2>&1

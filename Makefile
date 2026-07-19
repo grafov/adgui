@@ -74,10 +74,24 @@ install: release-xlibre release-wayland
 	@echo "for example: SUDO=doas make install"
 	$(SUDO) install ./build/adgui-xlibre $(PREFIX)
 	$(SUDO) install ./build/adgui-wayland $(PREFIX)
-	$(SUDO) install ./adgui-run $(PREFIX)
+	$(SUDO) install ./adgui $(PREFIX)
 
 deploy: release-wayland release-xlibre
 	go tool fyne package --target linux --exe build/adgui-wayland --icon ./res/Icon.png --release --tags wayland
+
+# Pack portable Linux amd64 archive for GitHub Releases.
+DIST_NAME=adgui-$(VERSION)-linux-amd64
+DIST_DIR=$(BINDIR)/$(DIST_NAME)
+DIST_ARCHIVE=$(BINDIR)/$(DIST_NAME).tar.xz
+
+.PHONY: dist
+dist: release-xlibre release-wayland
+	rm -rf $(DIST_DIR)
+	mkdir -p $(DIST_DIR)
+	cp build/adgui-xlibre build/adgui-wayland adgui LICENSE README.md $(DIST_DIR)/
+	chmod +x $(DIST_DIR)/adgui-xlibre $(DIST_DIR)/adgui-wayland $(DIST_DIR)/adgui
+	tar -C $(BINDIR) -cJf $(DIST_ARCHIVE) $(DIST_NAME)
+	cd $(BINDIR) && sha256sum $(DIST_NAME).tar.xz > $(DIST_NAME).tar.xz.sha256
 
 .PHONY: sloc
 sloc:
