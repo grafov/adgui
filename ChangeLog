@@ -1,3 +1,8 @@
+2026-07-20  Alexander I.Grafov  <grafov@inet.name>
+
+	* commands/commands.go: status check no longer logs when the result
+	  is unchanged from the previous check (reduces repeated stdout noise).
+
 2026-07-19  Alexander I.Grafov  <grafov@inet.name>
 
 	* adgui: renamed launcher script from adgui-run to adgui (portable

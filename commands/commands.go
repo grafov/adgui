@@ -97,6 +97,7 @@ type VPNManager struct {
 	connectedLocation  locations.Location
 	isConnected        bool
 	siteExclusionsMode SiteExclusionMode
+	lastStatusLog      string
 
 	// connection history (historyMx)
 	historyMx          sync.Mutex
@@ -762,10 +763,22 @@ func (v *VPNManager) statusCheckLoop() {
 	}
 }
 
+func (v *VPNManager) shouldLogStatusCheck(key string) bool {
+	v.statemx.Lock()
+	defer v.statemx.Unlock()
+	if v.lastStatusLog == key {
+		return false
+	}
+	v.lastStatusLog = key
+	return true
+}
+
 func (v *VPNManager) checkStatus() {
 	output, err := v.executeCommand("status")
 	if err != nil {
-		fmt.Printf("Status check error: %v\n", err)
+		if v.shouldLogStatusCheck("error:" + err.Error()) {
+			fmt.Printf("Status check error: %v\n", err)
+		}
 		return
 	}
 
@@ -775,12 +788,16 @@ func (v *VPNManager) checkStatus() {
 
 	// Проверяем статус
 	if strings.Contains(output, statusDisconnected) {
-		fmt.Printf("status check: disconnected\n")
+		if v.shouldLogStatusCheck("disconnected") {
+			fmt.Printf("status check: disconnected\n")
+		}
 		v.applyDisconnected()
 	} else if strings.Contains(output, "Connected to") {
 		locationName := ParseLocationFromStatus(output)
 		loc := v.resolveLocation(locationName)
-		fmt.Printf("status check: connected to %s\n", locationName)
+		if v.shouldLogStatusCheck("connected:" + locationName) {
+			fmt.Printf("status check: connected to %s\n", locationName)
+		}
 		v.applyConnected(loc)
 	}
 }
