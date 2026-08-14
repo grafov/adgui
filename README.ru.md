@@ -206,6 +206,10 @@ AIRPORT_CODES_AUTH=your_token
 - мелкие поправки в локализациях
 - отладка сложных случаев, где LLM не справилась
 
+## Похожие проекты
+
+- https://github.com/SpazzRabbit/adguardvpn-gui - симпатичный GUI на Python+QT
+
 ## Starware
 
 Это starware :) Если код оказался полезным, ставь звезду ⭐!

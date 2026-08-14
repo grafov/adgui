@@ -206,6 +206,10 @@ Kio estis farita de homo?
 - malgrandaj ĝustigoj en lokalizoj
 - sencimigo de malfacilaj kazoj, kie LLM malsukcesis
 
+## Similaj projektoj
+
+- https://github.com/SpazzRabbit/adguardvpn-gui - bela GUI en Python+QT
+
 ## Starware
 
 Ĉi tiu programaro estas starware :) Se vi trovas la kodon utila, ne forgesu voĉdoni por ĉi tiu deponejo per stelo ⭐!

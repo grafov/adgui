@@ -206,6 +206,10 @@ What was done by a human?
 - small fixes in localizations
 - debugging of hard cases where LLM was failed
 
+## Similar projects
+
+- https://github.com/SpazzRabbit/adguardvpn-gui - nice and clean GUI in Python+QT
+
 ## Starware
 
 This software is a starware :) If you find the code useful, don’t forget to vote for this repo with a star! ⭐
