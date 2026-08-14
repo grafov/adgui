@@ -74,7 +74,7 @@ install: release-xlibre release-wayland
 	@echo "for example: SUDO=doas make install"
 	$(SUDO) install ./build/adgui-xlibre $(PREFIX)
 	$(SUDO) install ./build/adgui-wayland $(PREFIX)
-	$(SUDO) install ./adgui $(PREFIX)
+	$(SUDO) install adgui $(PREFIX)
 
 deploy: release-wayland release-xlibre
 	go tool fyne package --target linux --exe build/adgui-wayland --icon ./res/Icon.png --release --tags wayland
