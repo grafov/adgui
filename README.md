@@ -47,7 +47,15 @@ cd adgui-*-linux-amd64
 ./adgui
 ```
 
-The archive contains `adgui-xlibre`, `adgui-wayland`, and the `adgui` launcher (picks Wayland or X11 automatically).
+The archive contains `adgui-xlibre`, `adgui-wayland`, the `adgui` launcher (picks Wayland or X11 automatically), plus `adgui.desktop` and `adgui.svg` for the application menu.
+
+To add a menu entry after unpacking (binaries should be on `PATH`, or copy them into `~/bin` / `/usr/local/bin` first):
+
+```bash
+mkdir -p ~/.local/share/applications ~/.local/share/icons/hicolor/scalable/apps
+cp adgui.desktop ~/.local/share/applications/
+cp adgui.svg ~/.local/share/icons/hicolor/scalable/apps/
+```
 
 ### Build from source
 
@@ -58,6 +66,8 @@ Requires a Go toolchain. Install into `/usr/local/bin` (needs root) with "sudo",
 Or use `PREFIX` for installing to another directory, for example under home:
 
 `PREFIX=~/bin make install`
+
+`make install` also installs the `.desktop` file and icon into the applications menu. Default `DATADIR` is `/usr/local/share` (or `/usr/share` when `PREFIX=/usr/bin`); for any other `PREFIX` it is `~/.local/share`. Override with `DATADIR=/path/to/share`.
 
 ### Sudo and TUN mode
 

@@ -47,7 +47,15 @@ cd adgui-*-linux-amd64
 ./adgui
 ```
 
-La arkivo enhavas `adgui-xlibre`, `adgui-wayland` kaj la lanĉilon `adgui` (aŭtomate elektas Wayland aŭ X11).
+La arkivo enhavas `adgui-xlibre`, `adgui-wayland`, la lanĉilon `adgui` (aŭtomate elektas Wayland aŭ X11), plus `adgui.desktop` kaj `adgui.svg` por la aplikaĵa menuo.
+
+Por aldoni menueron post malpako (duumaj dosieroj estu en `PATH`, aŭ unue kopiu ilin en `~/bin` / `/usr/local/bin`):
+
+```bash
+mkdir -p ~/.local/share/applications ~/.local/share/icons/hicolor/scalable/apps
+cp adgui.desktop ~/.local/share/applications/
+cp adgui.svg ~/.local/share/icons/hicolor/scalable/apps/
+```
 
 ### Kompili el fonto
 
@@ -58,6 +66,8 @@ Necesas Go-programada medio. Instalu en `/usr/local/bin` (bezonas root) per `sud
 Aŭ uzu `PREFIX` por instali en alian dosierujon, ekzemple hejme:
 
 `PREFIX=~/bin make install`
+
+`make install` ankaŭ instalas la `.desktop`-dosieron kaj piktogramon en la aplikaĵan menuon. Defaŭlta `DATADIR` estas `/usr/local/share` (aŭ `/usr/share` kiam `PREFIX=/usr/bin`); por iu ajn alia `PREFIX` ĝi estas `~/.local/share`. Anstataŭigu per `DATADIR=/path/to/share`.
 
 ### Sudo kaj TUN-reĝimo
 

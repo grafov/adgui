@@ -10,6 +10,16 @@ GOMOD=go mod
 
 PREFIX?=/usr/local/bin
 
+# Desktop entry and icon (FHS share). System bindirs map to the sibling share
+# dir; other PREFIX values (e.g. ~/bin) use the user XDG data home.
+ifeq ($(PREFIX),/usr/bin)
+DATADIR?=/usr/share
+else ifeq ($(PREFIX),/usr/local/bin)
+DATADIR?=/usr/local/share
+else
+DATADIR?=$(HOME)/.local/share
+endif
+
 # Replace it with "sudo", "doas" or somethat, that allows root privileges on your
 # system.
 # SUDO=sudo
@@ -75,6 +85,9 @@ install: release-xlibre release-wayland
 	$(SUDO) install ./build/adgui-xlibre $(PREFIX)
 	$(SUDO) install ./build/adgui-wayland $(PREFIX)
 	$(SUDO) install adgui $(PREFIX)
+	$(SUDO) install -d $(DATADIR)/applications $(DATADIR)/icons/hicolor/scalable/apps
+	$(SUDO) install -m 644 res/adgui.desktop $(DATADIR)/applications/adgui.desktop
+	$(SUDO) install -m 644 res/tray-icon.svg $(DATADIR)/icons/hicolor/scalable/apps/adgui.svg
 
 deploy: release-wayland release-xlibre
 	go tool fyne package --target linux --exe build/adgui-wayland --icon ./res/Icon.png --release --tags wayland
@@ -88,7 +101,8 @@ DIST_ARCHIVE=$(BINDIR)/$(DIST_NAME).tar.xz
 dist: release-xlibre release-wayland
 	rm -rf $(DIST_DIR)
 	mkdir -p $(DIST_DIR)
-	cp build/adgui-xlibre build/adgui-wayland adgui LICENSE README.md $(DIST_DIR)/
+	cp build/adgui-xlibre build/adgui-wayland adgui LICENSE README.md res/adgui.desktop $(DIST_DIR)/
+	cp res/tray-icon.svg $(DIST_DIR)/adgui.svg
 	chmod +x $(DIST_DIR)/adgui-xlibre $(DIST_DIR)/adgui-wayland $(DIST_DIR)/adgui
 	tar -C $(BINDIR) -cJf $(DIST_ARCHIVE) $(DIST_NAME)
 	cd $(BINDIR) && sha256sum $(DIST_NAME).tar.xz > $(DIST_NAME).tar.xz.sha256

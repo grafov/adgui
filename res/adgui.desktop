@@ -1,0 +1,19 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=AdGUI
+GenericName=VPN Client
+GenericName[ru]=VPN-клиент
+GenericName[eo]=VPN-kliento
+Comment=Desktop GUI for AdGuard VPN
+Comment[ru]=Графическая оболочка для AdGuard VPN
+Comment[eo]=Labortabla GUI por AdGuard VPN
+Exec=adgui
+TryExec=adgui
+Icon=adgui
+Terminal=false
+Categories=Network;
+Keywords=VPN;AdGuard;network;
+Keywords[ru]=VPN;AdGuard;сеть;
+Keywords[eo]=VPN;AdGuard;reto;
+StartupNotify=true

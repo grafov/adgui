@@ -47,7 +47,15 @@ cd adgui-*-linux-amd64
 ./adgui
 ```
 
-В архиве: `adgui-xlibre`, `adgui-wayland` и лаунчер `adgui` (сам выбирает Wayland или X11).
+В архиве: `adgui-xlibre`, `adgui-wayland`, лаунчер `adgui` (сам выбирает Wayland или X11), а также `adgui.desktop` и `adgui.svg` для меню приложений.
+
+Чтобы добавить пункт в меню после распаковки (бинарники должны быть в `PATH`, либо сначала скопируйте их в `~/bin` / `/usr/local/bin`):
+
+```bash
+mkdir -p ~/.local/share/applications ~/.local/share/icons/hicolor/scalable/apps
+cp adgui.desktop ~/.local/share/applications/
+cp adgui.svg ~/.local/share/icons/hicolor/scalable/apps/
+```
 
 ### Сборка из исходников
 
@@ -58,6 +66,8 @@ cd adgui-*-linux-amd64
 Или задайте `PREFIX` для установки в другой каталог, например в домашний:
 
 `PREFIX=~/bin make install`
+
+`make install` также ставит `.desktop`-файл и иконку в меню приложений. По умолчанию `DATADIR` — `/usr/local/share` (или `/usr/share` при `PREFIX=/usr/bin`); для любого другого `PREFIX` — `~/.local/share`. Переопределяется через `DATADIR=/path/to/share`.
 
 ### Sudo и TUN-режим
 

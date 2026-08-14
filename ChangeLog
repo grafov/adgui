@@ -1,3 +1,13 @@
+2026-08-14  Alexander I.Grafov  <grafov@inet.name>
+
+	* res/adgui.desktop: added Freedesktop desktop entry (en/ru/eo) so
+	  adgui appears in the application menu.
+	* Makefile: install the desktop file and tray SVG icon into DATADIR
+	  (applications + hicolor); include them in `make dist` archives used
+	  by CI/GitHub Releases.
+	* README.md, README.ru.md, README.eo.md: document menu install from
+	  source and from the portable archive.
+
 2026-07-20  Alexander I.Grafov  <grafov@inet.name>
 
 	* commands/commands.go: status check no longer logs when the result
