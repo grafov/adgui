@@ -1,5 +1,8 @@
 2026-08-27  Alexander I.Grafov  <grafov@inet.name>
 
+	* ui/sudo_prompt.go: fallback prompt window (quit confirm, sudo from
+	  tray) is fixed-size and centered so tiling WMs can float it instead
+	  of stretching a full tile around the overlay dialog.
 	* ui/ui.go: stop polling the clipboard on the Fyne main thread (X11
 	  clipboard reads could freeze the dashboard while the tray stayed
 	  responsive); Paste still reads the clipboard on demand.
