@@ -63,7 +63,9 @@ func (u *UI) connectionsPanel() (*fyne.Container, *connectionsPanelWidgets) {
 			}
 		})
 	})
+	u.dashboardmx.Lock()
 	u.dashboardConnectBtn = connectBtn
+	u.dashboardmx.Unlock()
 	u.updateDashboardButtons()
 
 	connectToBtn := widget.NewButton(lang.X("connections.connect_to", "Connect To..."), func() {

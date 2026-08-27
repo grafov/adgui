@@ -23,7 +23,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"adgui/commands"
 	"adgui/ipregion"
@@ -46,9 +45,9 @@ var (
 	DisconnectedColor       = color.NRGBA{R: 128, G: 128, B: 128, A: 255} // Серый
 	DisconnectedStatusColor = color.NRGBA{R: 255, G: 0, B: 0, A: 255}     // Красный
 	ConnectedColor          = color.NRGBA{R: 0, G: 255, B: 0, A: 255}     // Зеленый
-	WarningColor      = color.NRGBA{R: 255, G: 255, B: 0, A: 255}   // Желтый
-	StarInactiveColor = color.NRGBA{R: 160, G: 160, B: 160, A: 255}
-	StarActiveColor   = color.NRGBA{R: 255, G: 193, B: 7, A: 255}
+	WarningColor            = color.NRGBA{R: 255, G: 255, B: 0, A: 255}   // Желтый
+	StarInactiveColor       = color.NRGBA{R: 160, G: 160, B: 160, A: 255}
+	StarActiveColor         = color.NRGBA{R: 255, G: 193, B: 7, A: 255}
 )
 
 const (
@@ -97,11 +96,6 @@ type (
 		locationWindow fyne.Window
 		locationShown  bool
 
-		// Domains tab clipboard polling lifecycle
-		pasteWatchStop chan struct{}
-		pasteWatchDone chan struct{}
-		pasteWatchOnce sync.Once
-
 		// Hidden window for modal prompts when dashboard is closed
 		promptWindow fyne.Window
 
@@ -110,8 +104,7 @@ type (
 	}
 	// Properties related to application logic.
 	withLogicIncluded struct {
-		vpnmgr    *commands.VPNManager
-		checkReqs chan struct{}
+		vpnmgr *commands.VPNManager
 	}
 )
 
@@ -122,8 +115,7 @@ func New(vpnmgr *commands.VPNManager, appVersion string) *UI {
 	}
 	myApp.SetIcon(theme.DisconnectedIcon)
 	logic := withLogicIncluded{
-		vpnmgr:    vpnmgr,
-		checkReqs: make(chan struct{}, 1),
+		vpnmgr: vpnmgr,
 	}
 	desk, ok := myApp.(desktop.App)
 	ui := UI{
@@ -161,23 +153,6 @@ func (u *UI) Run() {
 	u.Fyne.Run()
 }
 
-func (u *UI) startPasteWatcher() {
-	if u.pasteWatchStop != nil {
-		return
-	}
-	u.pasteWatchStop = make(chan struct{})
-	u.pasteWatchDone = make(chan struct{})
-}
-
-func (u *UI) stopPasteWatcher() {
-	u.pasteWatchOnce.Do(func() {
-		if u.pasteWatchStop != nil {
-			close(u.pasteWatchStop)
-			<-u.pasteWatchDone
-		}
-	})
-}
-
 func (u *UI) createTrayMenu() {
 	status := fyne.NewMenuItem("Adguard VPN", func() {})
 	dashboard := fyne.NewMenuItem(lang.X("tray.menu.show_dashboard", "Show dashboard"), func() {
@@ -208,7 +183,6 @@ func (u *UI) createTrayMenu() {
 				if !ok {
 					return
 				}
-				u.stopPasteWatcher()
 				_ = u.vpnmgr.Close()
 				u.Fyne.Quit()
 			},
@@ -239,53 +213,52 @@ func (u *UI) createTrayMenu() {
 
 func (u *UI) updateMenuItems() {
 	u.traymx.Lock()
-	defer u.traymx.Unlock()
+	menu := u.menu
+	desk := u.desk
+	domainsCount := u.domainsCount
+	domainsMenuItem := u.domainsMenuItem
+	u.traymx.Unlock()
 
-	// Обновляем доступность пунктов меню
-	if u.menu != nil {
-		domainsCount := u.domainsCount
-		domainsMenuItem := u.domainsMenuItem
-		fyne.Do(func() {
-			items := u.menu.Items
-			if u.vpnmgr.IsConnected() {
-				u.menu.Label = lang.X("tray.menu.vpn_connected", "VPN connected")
-				items[0].Icon = theme.MenuConnectedIcon
-				modeSuffix := "GEN"
-				if u.vpnmgr.SiteExclusionsMode() == commands.SiteExclusionModeSelective {
-					modeSuffix = "SEL"
-				}
-				items[0].Label = lang.X("tray.status.mode", "{{.Location}} mode:{{.Mode}}", map[string]any{
-					"Location": strings.ToUpper(u.vpnmgr.Location()),
-					"Mode":     modeSuffix,
-				})
-			} else {
-				u.menu.Label = lang.X("tray.menu.vpn_disconnected", "VPN disconnected")
-				items[0].Icon = theme.MenuDisconnectedIcon
-				items[0].Label = lang.X("tray.menu.off", "OFF")
-			}
-			connected := u.vpnmgr.IsConnected()
-			if domainsMenuItem != nil {
-				domainsMenuItem.Label = domainsMenuLabel(domainsCount)
-			}
-			// false - means available
-			items[1].Disabled = false
-			items[2].Disabled = connected  // Connect the best
-			items[3].Disabled = false      // Connect To...
-			items[4].Disabled = false      // Domains
-			items[6].Disabled = !connected // Disconnect
-			items[8].Disabled = false      // Quit
-			u.menu.Items = items
-			u.desk.SetSystemTrayMenu(u.menu)
-		})
+	if menu == nil {
+		return
 	}
+
+	fyne.Do(func() {
+		items := menu.Items
+		if u.vpnmgr.IsConnected() {
+			menu.Label = lang.X("tray.menu.vpn_connected", "VPN connected")
+			items[0].Icon = theme.MenuConnectedIcon
+			modeSuffix := "GEN"
+			if u.vpnmgr.SiteExclusionsMode() == commands.SiteExclusionModeSelective {
+				modeSuffix = "SEL"
+			}
+			items[0].Label = lang.X("tray.status.mode", "{{.Location}} mode:{{.Mode}}", map[string]any{
+				"Location": strings.ToUpper(u.vpnmgr.Location()),
+				"Mode":     modeSuffix,
+			})
+		} else {
+			menu.Label = lang.X("tray.menu.vpn_disconnected", "VPN disconnected")
+			items[0].Icon = theme.MenuDisconnectedIcon
+			items[0].Label = lang.X("tray.menu.off", "OFF")
+		}
+		connected := u.vpnmgr.IsConnected()
+		if domainsMenuItem != nil {
+			domainsMenuItem.Label = domainsMenuLabel(domainsCount)
+		}
+		// false - means available
+		items[1].Disabled = false
+		items[2].Disabled = connected  // Connect the best
+		items[3].Disabled = false      // Connect To...
+		items[4].Disabled = false      // Domains
+		items[6].Disabled = !connected // Disconnect
+		items[8].Disabled = false      // Quit
+		menu.Items = items
+		desk.SetSystemTrayMenu(menu)
+	})
 }
 
 func (u *UI) updateUI() {
-	select {
-	case u.checkReqs <- struct{}{}:
-		time.Sleep(200 * time.Millisecond)
-	default:
-	}
+	u.vpnmgr.RequestStatusCheck()
 	for range u.updateReqs {
 		u.updateTrayIcon()
 		u.updateMenuItems()
@@ -295,13 +268,14 @@ func (u *UI) updateUI() {
 
 func (u *UI) updateTrayIcon() {
 	u.traymx.RLock()
-	defer u.traymx.RUnlock()
+	desk := u.desk
+	u.traymx.RUnlock()
 
 	fyne.Do(func() {
 		if u.vpnmgr.IsConnected() {
-			u.desk.SetSystemTrayIcon(theme.ConnectedIcon)
+			desk.SetSystemTrayIcon(theme.ConnectedIcon)
 		} else {
-			u.desk.SetSystemTrayIcon(theme.DisconnectedIcon)
+			desk.SetSystemTrayIcon(theme.DisconnectedIcon)
 		}
 	})
 }
@@ -431,36 +405,32 @@ func (u *UI) setLocationShown(shown bool) {
 
 func (u *UI) Dashboard() string {
 	u.dashboardmx.Lock()
-	defer u.dashboardmx.Unlock()
-
 	// Reuse a hidden dashboard instead of Close(): Close() sets the GLFW driver's
 	// closing flag while GLFW can still deliver cursor/mouse events, which can panic
 	// inside Fyne's processMouseMoved (nil view). Hide() does not set closing.
 	if u.dashboardWindow != nil {
 		u.dashboardWindow.Show()
 		u.dashboardShown = true
+		u.dashboardmx.Unlock()
 		return ""
 	}
 
-	// Create new dashboard window
 	window := u.Fyne.NewWindow(lang.X("dashboard.window_title", "adgui: VPN Dashboard"))
 	window.Resize(fyne.NewSize(800, 600))
 	u.dashboardWindow = window
+	u.dashboardmx.Unlock()
 
 	connectionsContent, connWids := u.connectionsPanel()
-	u.dashboardConnectionsWids = connWids
 
 	license := u.licensePanel()
-	u.startPasteWatcher()
 	tabs := container.NewAppTabs(
 		container.NewTabItem(lang.X("dashboard.tab.connections", "Connections"), connectionsContent),
 		container.NewTabItem(lang.X("dashboard.tab.ip_region", "IP Region"), u.ipRegionPanel()),
 		container.NewTabItem(lang.X("dashboard.tab.license", "License"), license),
-		container.NewTabItem(lang.X("dashboard.tab.domains", "Domains"), u.exclusionsPanel(u.pasteWatchStop)),
+		container.NewTabItem(lang.X("dashboard.tab.domains", "Domains"), u.exclusionsPanel()),
 		container.NewTabItem(lang.X("dashboard.tab.cmd_queue", "Cmd queue"), u.cmdQueuePanel()),
 		container.NewTabItem(lang.X("dashboard.tab.about", "About"), u.aboutPanel(u.appVersion)),
 	)
-	u.dashboardTabs = tabs
 	tabs.SetTabLocation(container.TabLocationLeading)
 	window.SetContent(tabs)
 
@@ -477,8 +447,12 @@ func (u *UI) Dashboard() string {
 		u.setDashboardShown(false)
 	})
 
+	u.dashboardmx.Lock()
+	u.dashboardConnectionsWids = connWids
+	u.dashboardTabs = tabs
 	window.Show()
 	u.dashboardShown = true
+	u.dashboardmx.Unlock()
 	return ""
 }
 
@@ -500,7 +474,7 @@ func (u *UI) licensePanel() *fyne.Container {
 	)
 }
 
-func (u *UI) exclusionsPanel(stopCh <-chan struct{}) *fyne.Container {
+func (u *UI) exclusionsPanel() *fyne.Container {
 	var mode = commands.SiteExclusionModeGeneral
 	var exclusions []string
 	var filtered []string
@@ -659,75 +633,35 @@ func (u *UI) exclusionsPanel(stopCh <-chan struct{}) *fyne.Container {
 		return host
 	}
 
-	updatePasteButtonState := func() {
-		if pasteBtn == nil {
+	pasteFromClipboard := func() {
+		content := ""
+		if clipboard != nil {
+			content = strings.TrimSpace(clipboard.Content())
+		}
+		domain := parseDomainFromClipboard(content)
+		if domain == "" {
 			return
 		}
-		fyne.Do(func() {
-			content := ""
-			if clipboard != nil {
-				content = strings.TrimSpace(clipboard.Content())
-			}
-			if content == "" {
-				pasteBtn.Disable()
-			} else {
-				pasteBtn.Enable()
-			}
-		})
-	}
-
-	pasteFromClipboard := func() {
-		fyne.Do(func() {
-			content := ""
-			if clipboard != nil {
-				content = strings.TrimSpace(clipboard.Content())
-			}
-			domain := parseDomainFromClipboard(content)
-			if content == "" {
-				pasteBtn.Disable()
-			} else {
-				pasteBtn.Enable()
-			}
-			if domain == "" {
-				return
-			}
-			filterEntry.SetText(domain)
-			go func(target string) {
-				entries := []string{"www." + target, "*." + target}
-				for _, entry := range entries {
-					if containsIgnoreCase(exclusions, entry) {
-						continue
-					}
-					if err := u.vpnmgr.AddSiteExclusion(entry); err != nil {
-						fmt.Printf("add exclusion error: %v\n", err)
-						return
-					}
+		filterEntry.SetText(domain)
+		snapshot := append([]string(nil), exclusions...)
+		go func(target string, existing []string) {
+			entries := []string{"www." + target, "*." + target}
+			for _, entry := range entries {
+				if containsIgnoreCase(existing, entry) {
+					continue
 				}
-				reloadExclusionsAndSave()
-			}(domain)
-		})
+				if err := u.vpnmgr.AddSiteExclusion(entry); err != nil {
+					fmt.Printf("add exclusion error: %v\n", err)
+					return
+				}
+			}
+			reloadExclusionsAndSave()
+		}(domain, snapshot)
 	}
 
 	pasteBtn = widget.NewButton(lang.X("domains.button.paste", "Paste"), func() {
 		pasteFromClipboard()
 	})
-
-	updatePasteButtonState()
-	if stopCh != nil {
-		go func() {
-			ticker := time.NewTicker(750 * time.Millisecond)
-			defer ticker.Stop()
-			defer close(u.pasteWatchDone)
-			for {
-				select {
-				case <-ticker.C:
-					updatePasteButtonState()
-				case <-stopCh:
-					return
-				}
-			}
-		}()
-	}
 
 	if u.dashboardWindow != nil {
 		u.dashboardWindow.Canvas().AddShortcut(
@@ -896,39 +830,39 @@ func (u *UI) exclusionsPanel(stopCh <-chan struct{}) *fyne.Container {
 			lang.X("domains.clear.title", "Clear"),
 			lang.X("domains.clear.confirm", "Clear all domains in the list?"),
 			func(ok bool) {
-			if !ok {
-				return
-			}
-
-			// Create a copy of the current exclusions to operate on
-			snapshot := append([]string(nil), exclusions...)
-
-			// Disable the button during operation to prevent multiple clicks
-			fyne.Do(func() {
-				clearBtn.Disable()
-			})
-
-			hideProgress := showInfiniteProgressDialog(
-				lang.X("domains.clear.progress.title", "Clearing"),
-				lang.XN("domains.clear.progress", "Removing {{.Count}} domains...", len(snapshot), map[string]any{"Count": len(snapshot)}),
-				u.dashboardWindow,
-			)
-			go func() {
-				defer func() {
-					hideProgress()
-					fyne.Do(func() {
-						clearBtn.Enable()
-					})
-				}()
-
-				for _, domain := range snapshot {
-					if err := u.vpnmgr.RemoveSiteExclusion(domain); err != nil {
-						fmt.Printf("remove exclusion error: %v\n", err)
-					}
+				if !ok {
+					return
 				}
-				reloadExclusionsAndSave()
-			}()
-		}, u.dashboardWindow)
+
+				// Create a copy of the current exclusions to operate on
+				snapshot := append([]string(nil), exclusions...)
+
+				// Disable the button during operation to prevent multiple clicks
+				fyne.Do(func() {
+					clearBtn.Disable()
+				})
+
+				hideProgress := showInfiniteProgressDialog(
+					lang.X("domains.clear.progress.title", "Clearing"),
+					lang.XN("domains.clear.progress", "Removing {{.Count}} domains...", len(snapshot), map[string]any{"Count": len(snapshot)}),
+					u.dashboardWindow,
+				)
+				go func() {
+					defer func() {
+						hideProgress()
+						fyne.Do(func() {
+							clearBtn.Enable()
+						})
+					}()
+
+					for _, domain := range snapshot {
+						if err := u.vpnmgr.RemoveSiteExclusion(domain); err != nil {
+							fmt.Printf("remove exclusion error: %v\n", err)
+						}
+					}
+					reloadExclusionsAndSave()
+				}()
+			}, u.dashboardWindow)
 	})
 
 	// Initially disable clear button if list is empty
@@ -1059,227 +993,225 @@ func (u *UI) LocationSelector() {
 		return text
 	}
 
-	fyne.Do(func() {
-		window := u.Fyne.NewWindow(lang.X("location.window_title", "adgui: select location"))
-		window.Resize(fyne.NewSize(700, 720))
-		u.locationWindow = window
+	window := u.Fyne.NewWindow(lang.X("location.window_title", "adgui: select location"))
+	window.Resize(fyne.NewSize(700, 720))
+	u.locationWindow = window
 
-		window.SetCloseIntercept(func() {
-			window.Hide()
-			u.setLocationShown(false)
+	window.SetCloseIntercept(func() {
+		window.Hide()
+		u.setLocationShown(false)
+	})
+
+	filterEntry := widget.NewEntry()
+	filterEntry.SetPlaceHolder(lang.X("location.filter.placeholder", "Filter by city or country..."))
+	currentFilter := ""
+
+	applyBookmarkFlags := func(locs []locations.Location) []locations.Location {
+		set := commands.LocationBookmarkSet(bookmarks)
+		return locations.ApplyBookmarkFlags(locs, func(loc locations.Location) bool {
+			_, ok := set[commands.LocationBookmarkKey(loc.ISO, loc.Country, loc.City)]
+			return ok
 		})
+	}
 
-		filterEntry := widget.NewEntry()
-		filterEntry.SetPlaceHolder(lang.X("location.filter.placeholder", "Filter by city or country..."))
-		currentFilter := ""
+	var table *widget.Table
+	refreshTable := func() {
+		filteredLocations = locations.FilterLocations(allLocations, currentFilter)
+		filteredLocations = applyBookmarkFlags(filteredLocations)
+		filteredLocations = locations.SortLocationsWithBookmarks(
+			filteredLocations,
+			sortColumn,
+			sortAscending,
+			bookmarksFirst,
+		)
+		if table != nil {
+			table.Refresh()
+		}
+	}
 
-		applyBookmarkFlags := func(locs []locations.Location) []locations.Location {
-			set := commands.LocationBookmarkSet(bookmarks)
-			return locations.ApplyBookmarkFlags(locs, func(loc locations.Location) bool {
-				_, ok := set[commands.LocationBookmarkKey(loc.ISO, loc.Country, loc.City)]
-				return ok
+	toggleBookmark := func(loc locations.Location) {
+		key := commands.LocationBookmarkKey(loc.ISO, loc.Country, loc.City)
+		found := -1
+		for i, bookmark := range bookmarks {
+			if commands.LocationBookmarkKey(bookmark.ISO, bookmark.Country, bookmark.City) == key {
+				found = i
+				break
+			}
+		}
+		if found >= 0 {
+			bookmarks = append(bookmarks[:found], bookmarks[found+1:]...)
+		} else {
+			bookmarks = append(bookmarks, commands.LocationBookmark{
+				ISO:     loc.ISO,
+				Country: loc.Country,
+				City:    loc.City,
 			})
 		}
-
-		var table *widget.Table
-		refreshTable := func() {
-			filteredLocations = locations.FilterLocations(allLocations, currentFilter)
-			filteredLocations = applyBookmarkFlags(filteredLocations)
-			filteredLocations = locations.SortLocationsWithBookmarks(
-				filteredLocations,
-				sortColumn,
-				sortAscending,
-				bookmarksFirst,
-			)
-			if table != nil {
-				table.Refresh()
-			}
+		if saveErr := commands.SaveLocationBookmarks(bookmarks); saveErr != nil {
+			fmt.Printf("failed to save location bookmarks: %v\n", saveErr)
 		}
+		allLocations = applyBookmarkFlags(allLocations)
+	}
 
-		toggleBookmark := func(loc locations.Location) {
-			key := commands.LocationBookmarkKey(loc.ISO, loc.Country, loc.City)
-			found := -1
-			for i, bookmark := range bookmarks {
-				if commands.LocationBookmarkKey(bookmark.ISO, bookmark.Country, bookmark.City) == key {
-					found = i
-					break
-				}
+	table = widget.NewTable(
+		func() (int, int) {
+			return len(filteredLocations) + 1, locationTableCols
+		},
+		func() fyne.CanvasObject {
+			flagImg := canvas.NewImageFromResource(nil)
+			flagImg.FillMode = canvas.ImageFillContain
+			flagImg.SetMinSize(fyne.NewSize(28, 18))
+			label := widget.NewLabel("")
+			star := canvas.NewText("☆", StarInactiveColor)
+			star.TextSize = 16
+			star.Alignment = fyne.TextAlignCenter
+			return container.NewStack(flagImg, label, star)
+		},
+		func(id widget.TableCellID, obj fyne.CanvasObject) {
+			box := obj.(*fyne.Container)
+			flagImg := box.Objects[0].(*canvas.Image)
+			label := box.Objects[1].(*widget.Label)
+			star := box.Objects[2].(*canvas.Text)
+
+			flagImg.Hide()
+			flagImg.Resource = nil
+			flagImg.Refresh()
+			label.Hide()
+			label.SetText("")
+			star.Hide()
+			star.Text = ""
+			label.TextStyle.Bold = false
+
+			if id.Row == 0 {
+				label.Show()
+				label.TextStyle.Bold = true
+				label.SetText(getHeaderText(id.Col, sortColumn, sortAscending, bookmarksFirst))
+				label.Refresh()
+				return
 			}
-			if found >= 0 {
-				bookmarks = append(bookmarks[:found], bookmarks[found+1:]...)
-			} else {
-				bookmarks = append(bookmarks, commands.LocationBookmark{
-					ISO:     loc.ISO,
-					Country: loc.Country,
-					City:    loc.City,
-				})
-			}
-			if saveErr := commands.SaveLocationBookmarks(bookmarks); saveErr != nil {
-				fmt.Printf("failed to save location bookmarks: %v\n", saveErr)
-			}
-			allLocations = applyBookmarkFlags(allLocations)
-		}
 
-		table = widget.NewTable(
-			func() (int, int) {
-				return len(filteredLocations) + 1, locationTableCols
-			},
-			func() fyne.CanvasObject {
-				flagImg := canvas.NewImageFromResource(nil)
-				flagImg.FillMode = canvas.ImageFillContain
-				flagImg.SetMinSize(fyne.NewSize(28, 18))
-				label := widget.NewLabel("")
-				star := canvas.NewText("☆", StarInactiveColor)
-				star.TextSize = 16
-				star.Alignment = fyne.TextAlignCenter
-				return container.NewStack(flagImg, label, star)
-			},
-			func(id widget.TableCellID, obj fyne.CanvasObject) {
-				box := obj.(*fyne.Container)
-				flagImg := box.Objects[0].(*canvas.Image)
-				label := box.Objects[1].(*widget.Label)
-				star := box.Objects[2].(*canvas.Text)
-
-				flagImg.Hide()
-				flagImg.Resource = nil
-				flagImg.Refresh()
-				label.Hide()
-				label.SetText("")
-				star.Hide()
-				star.Text = ""
-				label.TextStyle.Bold = false
-
-				if id.Row == 0 {
-					label.Show()
-					label.TextStyle.Bold = true
-					label.SetText(getHeaderText(id.Col, sortColumn, sortAscending, bookmarksFirst))
-					label.Refresh()
-					return
-				}
-
-				loc := filteredLocations[id.Row-1]
-				switch id.Col {
-				case locationColFlag:
-					if res := theme.FlagResource(loc.ISO); res != nil {
-						flagImg.Resource = res
-						flagImg.Show()
-						flagImg.Refresh()
-					} else {
-						label.Show()
-						label.SetText(loc.ISO)
-					}
-				case locationColISO:
+			loc := filteredLocations[id.Row-1]
+			switch id.Col {
+			case locationColFlag:
+				if res := theme.FlagResource(loc.ISO); res != nil {
+					flagImg.Resource = res
+					flagImg.Show()
+					flagImg.Refresh()
+				} else {
 					label.Show()
 					label.SetText(loc.ISO)
-				case locationColCountry:
-					label.Show()
-					label.SetText(loc.Country)
-				case locationColCity:
-					label.Show()
-					label.SetText(loc.City)
-				case locationColPing:
-					label.Show()
-					label.SetText(strconv.Itoa(loc.Ping))
-				case locationColStar:
-					star.Show()
-					if loc.Bookmarked {
-						star.Text = "★"
-						star.Color = StarActiveColor
-					} else {
-						star.Text = "☆"
-						star.Color = StarInactiveColor
-					}
-					star.Refresh()
 				}
-				box.Refresh()
-			},
-		)
-
-		table.SetColumnWidth(locationColFlag, 36)
-		table.SetColumnWidth(locationColISO, 60)
-		table.SetColumnWidth(locationColCountry, 180)
-		table.SetColumnWidth(locationColCity, 180)
-		table.SetColumnWidth(locationColPing, 90)
-		table.SetColumnWidth(locationColStar, 40)
-
-		table.OnSelected = func(id widget.TableCellID) {
-			if id.Row == 0 {
-				switch id.Col {
-				case locationColFlag:
-					table.UnselectAll()
-					return
-				case locationColStar:
-					bookmarksFirst = !bookmarksFirst
-					refreshTable()
-					table.UnselectAll()
-					return
-				}
-
-				clickedColumn := sortByColumn[id.Col]
-				if clickedColumn == sortColumn {
-					sortAscending = !sortAscending
+			case locationColISO:
+				label.Show()
+				label.SetText(loc.ISO)
+			case locationColCountry:
+				label.Show()
+				label.SetText(loc.Country)
+			case locationColCity:
+				label.Show()
+				label.SetText(loc.City)
+			case locationColPing:
+				label.Show()
+				label.SetText(strconv.Itoa(loc.Ping))
+			case locationColStar:
+				star.Show()
+				if loc.Bookmarked {
+					star.Text = "★"
+					star.Color = StarActiveColor
 				} else {
-					sortColumn = clickedColumn
-					sortAscending = true
+					star.Text = "☆"
+					star.Color = StarInactiveColor
 				}
+				star.Refresh()
+			}
+			box.Refresh()
+		},
+	)
 
+	table.SetColumnWidth(locationColFlag, 36)
+	table.SetColumnWidth(locationColISO, 60)
+	table.SetColumnWidth(locationColCountry, 180)
+	table.SetColumnWidth(locationColCity, 180)
+	table.SetColumnWidth(locationColPing, 90)
+	table.SetColumnWidth(locationColStar, 40)
+
+	table.OnSelected = func(id widget.TableCellID) {
+		if id.Row == 0 {
+			switch id.Col {
+			case locationColFlag:
+				table.UnselectAll()
+				return
+			case locationColStar:
+				bookmarksFirst = !bookmarksFirst
 				refreshTable()
 				table.UnselectAll()
 				return
 			}
 
-			if id.Col == locationColStar {
-				toggleBookmark(filteredLocations[id.Row-1])
-				refreshTable()
-				table.UnselectAll()
-				return
+			clickedColumn := sortByColumn[id.Col]
+			if clickedColumn == sortColumn {
+				sortAscending = !sortAscending
+			} else {
+				sortColumn = clickedColumn
+				sortAscending = true
 			}
 
-			selectedLocation := filteredLocations[id.Row-1]
-			fmt.Printf("Selected: %+v\n", selectedLocation)
-			u.runPrivileged(func() {
-				fyne.Do(func() {
-					window.Hide()
-					u.setLocationShown(false)
-				})
-				u.vpnmgr.ConnectToLocation(selectedLocation)
-			})
-		}
-
-		filterEntry.OnChanged = func(query string) {
-			currentFilter = query
 			refreshTable()
+			table.UnselectAll()
+			return
 		}
 
-		content := container.NewBorder(filterEntry, nil, nil, nil, table)
-		window.SetContent(content)
+		if id.Col == locationColStar {
+			toggleBookmark(filteredLocations[id.Row-1])
+			refreshTable()
+			table.UnselectAll()
+			return
+		}
 
-		window.Canvas().SetOnTypedKey(func(k *fyne.KeyEvent) {
-			if k.Name == fyne.KeyEscape {
+		selectedLocation := filteredLocations[id.Row-1]
+		fmt.Printf("Selected: %+v\n", selectedLocation)
+		u.runPrivileged(func() {
+			fyne.Do(func() {
 				window.Hide()
 				u.setLocationShown(false)
-			}
-		})
-
-		window.Show()
-		u.setLocationShown(true)
-
-		go func() {
-			locs := u.vpnmgr.ListLocations()
-			fyne.Do(func() {
-				if len(locs) > 0 {
-					pruned, pruneErr := commands.PruneAndSaveLocationBookmarks(bookmarks, locs)
-					if pruneErr != nil {
-						fmt.Printf("failed to prune location bookmarks: %v\n", pruneErr)
-					} else {
-						bookmarks = pruned
-					}
-				}
-				allLocations = applyBookmarkFlags(locs)
-				refreshTable()
 			})
-		}()
+			u.vpnmgr.ConnectToLocation(selectedLocation)
+		})
+	}
+
+	filterEntry.OnChanged = func(query string) {
+		currentFilter = query
+		refreshTable()
+	}
+
+	content := container.NewBorder(filterEntry, nil, nil, nil, table)
+	window.SetContent(content)
+
+	window.Canvas().SetOnTypedKey(func(k *fyne.KeyEvent) {
+		if k.Name == fyne.KeyEscape {
+			window.Hide()
+			u.setLocationShown(false)
+		}
 	})
+
+	window.Show()
+	u.locationShown = true
+
+	go func() {
+		locs := u.vpnmgr.ListLocations()
+		fyne.Do(func() {
+			if len(locs) > 0 {
+				pruned, pruneErr := commands.PruneAndSaveLocationBookmarks(bookmarks, locs)
+				if pruneErr != nil {
+					fmt.Printf("failed to prune location bookmarks: %v\n", pruneErr)
+				} else {
+					bookmarks = pruned
+				}
+			}
+			allLocations = applyBookmarkFlags(locs)
+			refreshTable()
+		})
+	}()
 }
 
 func showInfiniteProgressDialog(title, message string, window fyne.Window) func() {

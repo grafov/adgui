@@ -113,7 +113,7 @@ type VPNManager struct {
 	nextCmdID     uint64
 	onQueueChange func()
 
-	sudoEnv       *sudowrap.Env
+	sudoEnv        *sudowrap.Env
 	passwordPrompt PasswordPrompt
 	promptMx       sync.Mutex
 }
@@ -280,6 +280,15 @@ func (v *VPNManager) SetStatusChangeCallback(callback func()) {
 	v.statemx.Lock()
 	defer v.statemx.Unlock()
 	v.onStatusChange = callback
+}
+
+// RequestStatusCheck asks the status loop to run a check soon without blocking
+// if a check is already queued.
+func (v *VPNManager) RequestStatusCheck() {
+	select {
+	case v.checkReqs <- struct{}{}:
+	default:
+	}
 }
 
 func (v *VPNManager) executeCommand(args ...string) (string, error) {
@@ -461,7 +470,7 @@ func (v *VPNManager) ConnectAuto() {
 		fmt.Printf("Could not connect: %s: %s\n", err, output)
 		return
 	}
-	v.checkReqs <- struct{}{}
+	v.RequestStatusCheck()
 }
 
 func (v *VPNManager) ListLocations() []locations.Location {

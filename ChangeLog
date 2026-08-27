@@ -1,3 +1,15 @@
+2026-08-27  Alexander I.Grafov  <grafov@inet.name>
+
+	* ui/ui.go: stop polling the clipboard on the Fyne main thread (X11
+	  clipboard reads could freeze the dashboard while the tray stayed
+	  responsive); Paste still reads the clipboard on demand.
+	* ui/ui.go: build the location selector under its mutex so a second
+	  "Connect To..." click cannot open another window.
+	* ui/ui.go: do not hold the dashboard mutex while constructing tabs
+	  (status updates no longer wait on disk I/O in the IP Region panel).
+	* commands/commands.go: RequestStatusCheck is non-blocking; ConnectAuto
+	  no longer waits on the status-check channel.
+
 2026-08-14  Alexander I.Grafov  <grafov@inet.name>
 
 	* res/adgui.desktop: added Freedesktop desktop entry (en/ru/eo) so

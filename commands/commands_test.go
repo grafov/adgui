@@ -228,3 +228,19 @@ var _ = Describe("Command Queue Tracking and Killing", func() {
 		})
 	})
 })
+
+var _ = Describe("RequestStatusCheck", func() {
+	It("does not block when a check is already queued", func() {
+		mgr := commands.New()
+		defer func() { _ = mgr.Close() }()
+
+		done := make(chan struct{})
+		go func() {
+			for i := 0; i < 64; i++ {
+				mgr.RequestStatusCheck()
+			}
+			close(done)
+		}()
+		Eventually(done, "1s").Should(BeClosed())
+	})
+})
