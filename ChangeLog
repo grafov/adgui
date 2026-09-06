@@ -1,3 +1,28 @@
+2026-09-07  Alexander I.Grafov  <grafov@inet.name>
+
+	* ui/window_lifecycle.go, ui/window_lifecycle_wayland.go,
+	  ui/window_lifecycle_other.go, ui/ui.go, ui/sudo_prompt.go: on
+	  Wayland, close dashboard and location windows instead of
+	  Hide()+Show() (GLFW tears down xdg_toplevel with blocking
+	  compositor roundtrips); X11 still reuses hidden windows; sudo
+	  and quit dialogs attach to the dashboard when no other window
+	  is shown; Esc no longer dismisses a window under an open dialog.
+	* ui/ipregion_panel.go, ui/connections_panel.go, ui/ui.go: keep the
+	  Fyne main thread off disk I/O and tray rebuilds (async IP-region
+	  cache load, tab-scoped refresh, pooled history labels, save
+	  exclusions off-UI, skip unchanged tray updates, debounce status
+	  floods).
+	* ui/ui.go, ui/command_queue.go, commands/commands.go: do not call
+	  Fyne widgets from background goroutines (cache clear refreshes
+	  via the update channel); snapshot dashboard pointers under the
+	  mutex; document that locationsCache is guarded by statemx.
+	* ui/ui.go, README.md, README.ru.md, README.eo.md: guard the domain
+	  list index; note that on-demand clipboard paste can block the UI
+	  thread on Wayland.
+	* Makefile, adgui: dump running adgui with SIGQUIT; grep Fyne
+	  thread errors in /tmp/adgui.log; launcher always redirects
+	  stdout/stderr there.
+
 2026-08-27  Alexander I.Grafov  <grafov@inet.name>
 
 	* ui/sudo_prompt.go: fallback prompt window (quit confirm, sudo from
