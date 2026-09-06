@@ -219,6 +219,7 @@ AIRPORT_CODES_AUTH=your_token
 ## Похожие проекты
 
 - https://github.com/SpazzRabbit/adguardvpn-gui - симпатичный GUI на Python+QT
+- https://github.com/bolikcraft/vantah - GUI с окном и треем на C#/Avalonia, есть пакеты для Arch, Debian/Ubuntu, Fedora и openSUSE
 
 ## Starware
 
