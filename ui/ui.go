@@ -450,16 +450,24 @@ func (u *UI) setIPRegionRefreshFunc(fn func()) {
 	u.ipRegionmx.Unlock()
 }
 
-func (u *UI) clearIPRegionCache() {
+func (u *UI) clearIPRegionCacheFiles() {
 	if err := ipregion.ClearCache(); err != nil {
 		fmt.Printf("clear region-ip cache error: %v\n", err)
 	}
-	u.ipRegionmx.RLock()
-	refresh := u.ipRegionRefreshFunc
-	u.ipRegionmx.RUnlock()
-	if refresh != nil {
-		refresh()
+}
+
+func (u *UI) clearIPRegionCache() {
+	u.clearIPRegionCacheFiles()
+	select {
+	case u.updateReqs <- struct{}{}:
+	default:
 	}
+}
+
+func (u *UI) dashboardWindowSnapshot() fyne.Window {
+	u.dashboardmx.RLock()
+	defer u.dashboardmx.RUnlock()
+	return u.dashboardWindow
 }
 
 func (u *UI) setDashboardShown(shown bool) {
@@ -746,11 +754,17 @@ func (u *UI) exclusionsPanel() *fyne.Container {
 		pasteFromClipboard()
 	})
 
-	if u.dashboardWindow != nil {
-		u.dashboardWindow.Canvas().AddShortcut(
+	u.dashboardmx.RLock()
+	dashWin := u.dashboardWindow
+	u.dashboardmx.RUnlock()
+	if dashWin != nil {
+		dashWin.Canvas().AddShortcut(
 			&desktop.CustomShortcut{KeyName: fyne.KeyV, Modifier: fyne.KeyModifierAlt | fyne.KeyModifierControl},
-			func(shortcut fyne.Shortcut) {
-				if u.dashboardTabs == nil || u.dashboardTabs.SelectedIndex() != domainsTabIndex {
+			func(_ fyne.Shortcut) {
+				u.dashboardmx.RLock()
+				tabs := u.dashboardTabs
+				u.dashboardmx.RUnlock()
+				if tabs == nil || tabs.SelectedIndex() != domainsTabIndex {
 					return
 				}
 				pasteFromClipboard()
@@ -895,7 +909,7 @@ func (u *UI) exclusionsPanel() *fyne.Container {
 					}
 				}
 				if importErr != nil {
-					fyne.Do(func() { dialog.ShowError(importErr, u.dashboardWindow) })
+					fyne.Do(func() { dialog.ShowError(importErr, u.dashboardWindowSnapshot()) })
 				}
 				reloadExclusionsAndSave()
 			}(toAdd)

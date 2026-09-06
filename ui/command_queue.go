@@ -95,13 +95,13 @@ func (u *UI) cmdQueuePanel() *fyne.Container {
 							go func(targetID uint64) {
 								if err := u.vpnmgr.KillCommand(targetID); err != nil {
 									fyne.Do(func() {
-										dialog.ShowError(err, u.dashboardWindow)
+										dialog.ShowError(err, u.dashboardWindowSnapshot())
 									})
 								}
 							}(cmd.ID)
 						}
 					},
-					u.dashboardWindow,
+					u.dashboardWindowSnapshot(),
 				)
 			}
 		},
@@ -116,7 +116,7 @@ func (u *UI) cmdQueuePanel() *fyne.Container {
 					go u.vpnmgr.KillAllCommands()
 				}
 			},
-			u.dashboardWindow,
+			u.dashboardWindowSnapshot(),
 		)
 	})
 

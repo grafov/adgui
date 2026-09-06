@@ -98,13 +98,13 @@ type VPNManager struct {
 	isConnected        bool
 	siteExclusionsMode SiteExclusionMode
 	lastStatusLog      string
-
-	// connection history (historyMx)
-	historyMx          sync.Mutex
-	history            []ConnectionHistoryEntry
-	activeConnection   *ConnectionHistoryEntry
 	locationsCache     []locations.Location
 	locationsCacheTime time.Time
+
+	// connection history (historyMx)
+	historyMx        sync.Mutex
+	history          []ConnectionHistoryEntry
+	activeConnection *ConnectionHistoryEntry
 
 	// command queue tracking
 	queueMx       sync.Mutex
