@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"adgui/commands"
 	"adgui/ipregion"
@@ -60,7 +61,21 @@ const (
 	locationTableCols  = 6
 )
 
-const domainsTabIndex = 3
+const (
+	connectionsTabIndex = 0
+	ipRegionTabIndex    = 1
+	licenseTabIndex     = 2
+	domainsTabIndex     = 3
+	cmdQueueTabIndex    = 4
+	aboutTabIndex       = 5
+)
+
+type trayMenuState struct {
+	connected     bool
+	location      string
+	exclusionMode commands.SiteExclusionMode
+	domainsCount  int
+}
 
 type (
 	// Properties related to UI.
@@ -74,6 +89,10 @@ type (
 		menu            *fyne.Menu
 		domainsMenuItem *fyne.MenuItem
 		domainsCount    int
+		lastTrayMenu    trayMenuState
+		trayMenuHasLast bool
+		lastTrayIconOn  bool
+		trayIconHasLast bool
 
 		// Dashboard window and widgets for live updates
 		dashboardmx              sync.RWMutex
@@ -207,23 +226,35 @@ func (u *UI) updateMenuItems() {
 	desk := u.desk
 	domainsCount := u.domainsCount
 	domainsMenuItem := u.domainsMenuItem
+	last := u.lastTrayMenu
+	hasLast := u.trayMenuHasLast
 	u.traymx.Unlock()
 
-	if menu == nil {
+	if menu == nil || desk == nil {
+		return
+	}
+
+	next := trayMenuState{
+		connected:     u.vpnmgr.IsConnected(),
+		location:      u.vpnmgr.Location(),
+		exclusionMode: u.vpnmgr.SiteExclusionsMode(),
+		domainsCount:  domainsCount,
+	}
+	if hasLast && last == next {
 		return
 	}
 
 	fyne.Do(func() {
 		items := menu.Items
-		if u.vpnmgr.IsConnected() {
+		if next.connected {
 			menu.Label = lang.X("tray.menu.vpn_connected", "VPN connected")
 			items[0].Icon = theme.MenuConnectedIcon
 			modeSuffix := "GEN"
-			if u.vpnmgr.SiteExclusionsMode() == commands.SiteExclusionModeSelective {
+			if next.exclusionMode == commands.SiteExclusionModeSelective {
 				modeSuffix = "SEL"
 			}
 			items[0].Label = lang.X("tray.status.mode", "{{.Location}} mode:{{.Mode}}", map[string]any{
-				"Location": strings.ToUpper(u.vpnmgr.Location()),
+				"Location": strings.ToUpper(next.location),
 				"Mode":     modeSuffix,
 			})
 		} else {
@@ -231,25 +262,44 @@ func (u *UI) updateMenuItems() {
 			items[0].Icon = theme.MenuDisconnectedIcon
 			items[0].Label = lang.X("tray.menu.off", "OFF")
 		}
-		connected := u.vpnmgr.IsConnected()
 		if domainsMenuItem != nil {
-			domainsMenuItem.Label = domainsMenuLabel(domainsCount)
+			domainsMenuItem.Label = domainsMenuLabel(next.domainsCount)
 		}
-		// false - means available
 		items[1].Disabled = false
-		items[2].Disabled = connected  // Connect the best
-		items[3].Disabled = false      // Connect To...
-		items[4].Disabled = false      // Domains
-		items[6].Disabled = !connected // Disconnect
-		items[8].Disabled = false      // Quit
+		items[2].Disabled = next.connected
+		items[3].Disabled = false
+		items[4].Disabled = false
+		items[6].Disabled = !next.connected
+		items[8].Disabled = false
 		menu.Items = items
 		desk.SetSystemTrayMenu(menu)
+		u.traymx.Lock()
+		u.lastTrayMenu = next
+		u.trayMenuHasLast = true
+		u.traymx.Unlock()
 	})
 }
 
 func (u *UI) updateUI() {
 	u.vpnmgr.RequestStatusCheck()
+	const debounce = 250 * time.Millisecond
 	for range u.updateReqs {
+		timer := time.NewTimer(debounce)
+	drain:
+		for {
+			select {
+			case <-u.updateReqs:
+				if !timer.Stop() {
+					select {
+					case <-timer.C:
+					default:
+					}
+				}
+				timer.Reset(debounce)
+			case <-timer.C:
+				break drain
+			}
+		}
 		u.updateTrayIcon()
 		u.updateMenuItems()
 		u.updateDashboard()
@@ -257,16 +307,31 @@ func (u *UI) updateUI() {
 }
 
 func (u *UI) updateTrayIcon() {
-	u.traymx.RLock()
+	u.traymx.Lock()
 	desk := u.desk
-	u.traymx.RUnlock()
+	hasLast := u.trayIconHasLast
+	lastOn := u.lastTrayIconOn
+	u.traymx.Unlock()
+
+	if desk == nil {
+		return
+	}
+
+	connected := u.vpnmgr.IsConnected()
+	if hasLast && lastOn == connected {
+		return
+	}
 
 	fyne.Do(func() {
-		if u.vpnmgr.IsConnected() {
+		if connected {
 			desk.SetSystemTrayIcon(theme.ConnectedIcon)
 		} else {
 			desk.SetSystemTrayIcon(theme.DisconnectedIcon)
 		}
+		u.traymx.Lock()
+		u.lastTrayIconOn = connected
+		u.trayIconHasLast = true
+		u.traymx.Unlock()
 	})
 }
 
@@ -325,6 +390,7 @@ func (u *UI) updateDashboard() {
 	window := u.dashboardWindow
 	connectBtn := u.dashboardConnectBtn
 	connWids := u.dashboardConnectionsWids
+	tabs := u.dashboardTabs
 	u.dashboardmx.RUnlock()
 
 	if window == nil {
@@ -334,6 +400,7 @@ func (u *UI) updateDashboard() {
 	fyne.Do(func() {
 		u.dashboardmx.RLock()
 		currentWindow := u.dashboardWindow
+		currentTabs := u.dashboardTabs
 		u.dashboardmx.RUnlock()
 
 		if currentWindow != window {
@@ -347,20 +414,34 @@ func (u *UI) updateDashboard() {
 			u.updateDashboardButtons()
 		}
 
-		u.cmdQueuemx.RLock()
-		refresh := u.cmdQueueRefreshFunc
-		u.cmdQueuemx.RUnlock()
-		if refresh != nil {
-			refresh()
+		if currentTabs == nil {
+			currentTabs = tabs
 		}
+		u.refreshVisibleDashboardTab(currentTabs)
+	})
+}
 
+func (u *UI) refreshVisibleDashboardTab(tabs *container.AppTabs) {
+	if tabs == nil {
+		return
+	}
+	switch tabs.SelectedIndex() {
+	case ipRegionTabIndex:
 		u.ipRegionmx.RLock()
 		ipRefresh := u.ipRegionRefreshFunc
 		u.ipRegionmx.RUnlock()
 		if ipRefresh != nil {
 			ipRefresh()
 		}
-	})
+	case cmdQueueTabIndex:
+		u.cmdQueuemx.RLock()
+		refresh := u.cmdQueueRefreshFunc
+		u.cmdQueuemx.RUnlock()
+		if refresh != nil {
+			refresh()
+		}
+	case connectionsTabIndex, licenseTabIndex, domainsTabIndex, aboutTabIndex:
+	}
 }
 
 func (u *UI) setIPRegionRefreshFunc(fn func()) {
@@ -429,7 +510,11 @@ func (u *UI) Dashboard() string {
 		container.NewTabItem(lang.X("dashboard.tab.about", "About"), u.aboutPanel(u.appVersion)),
 	)
 	tabs.SetTabLocation(container.TabLocationLeading)
+	tabs.OnSelected = func(_ *container.TabItem) {
+		u.refreshVisibleDashboardTab(tabs)
+	}
 	window.SetContent(tabs)
+	u.refreshVisibleDashboardTab(tabs)
 
 	window.SetOnClosed(func() {
 		u.releaseDashboardWindow(window)
@@ -905,18 +990,17 @@ func (u *UI) exclusionsPanel() *fyne.Container {
 				return
 			}
 			u.setDomainsCount(len(newExclusions))
+			if err := commands.SaveExclusionsForMode(newMode, newExclusions); err != nil {
+				fmt.Printf("failed to auto-save exclusions for mode %s: %v\n", newMode, err)
+			} else {
+				u.clearIPRegionCache()
+			}
 			fyne.Do(func() {
 				mode = newMode
 				exclusions = newExclusions
 				selectExclusionModeRadio()
 				refreshFiltered()
 				updateClearButtonState()
-
-				if err := commands.SaveExclusionsForMode(mode, exclusions); err != nil {
-					fmt.Printf("failed to auto-save exclusions for mode %s: %v\n", mode, err)
-				} else {
-					u.clearIPRegionCache()
-				}
 			})
 		}()
 	}

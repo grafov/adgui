@@ -35,6 +35,7 @@ type connectionsPanelWidgets struct {
 	statusLabel    *canvas.Text
 	historyBox     *fyne.Container
 	historySection *fyne.Container
+	historyLabels  []*widget.Label
 }
 
 func (u *UI) connectionsPanel() (*fyne.Container, *connectionsPanelWidgets) {
@@ -135,17 +136,28 @@ func (u *UI) refreshConnectionsPanel(w *connectionsPanelWidgets) {
 	w.pingLabel.Refresh()
 	w.statusLabel.Refresh()
 
-	w.historyBox.Objects = nil
 	entries := u.vpnmgr.PreviousConnectionHistory()
 	if len(entries) == 0 {
 		w.historySection.Hide()
+		for _, label := range w.historyLabels {
+			label.Hide()
+		}
 	} else {
 		w.historySection.Show()
-		for _, entry := range entries {
+		for i, entry := range entries {
 			line := formatHistoryEntry(entry)
+			if i < len(w.historyLabels) {
+				w.historyLabels[i].SetText(line)
+				w.historyLabels[i].Show()
+				continue
+			}
 			label := widget.NewLabel(line)
 			label.Wrapping = fyne.TextWrapWord
 			w.historyBox.Add(label)
+			w.historyLabels = append(w.historyLabels, label)
+		}
+		for i := len(entries); i < len(w.historyLabels); i++ {
+			w.historyLabels[i].Hide()
 		}
 	}
 	w.historyBox.Refresh()

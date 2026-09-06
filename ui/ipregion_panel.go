@@ -23,6 +23,7 @@ import (
 
 	"adgui/config"
 	"adgui/ipregion"
+	"adgui/locations"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -243,24 +244,37 @@ func (u *UI) ipRegionPanel() *fyne.Container {
 			return
 		}
 		key := currentCacheKey()
-		loc, connected := u.vpnmgr.ConnectedLocation()
-		entry, err := ipregion.LoadCacheForState(loc, connected)
-		if err != nil {
-			fmt.Printf("load region-ip cache error: %v\n", err)
-			return
-		}
-		if entry == nil {
-			if displayedKey != "" {
-				clearDisplay()
-				displayedKey = ""
-			}
-			return
-		}
 		if key == displayedKey {
 			return
 		}
-		applyCachedEntry(entry, true)
-		displayedKey = key
+		loc, connected := u.vpnmgr.ConnectedLocation()
+		go func(loadKey string, loadLoc locations.Location, loadConnected bool) {
+			entry, err := ipregion.LoadCacheForState(loadLoc, loadConnected)
+			if err != nil {
+				fmt.Printf("load region-ip cache error: %v\n", err)
+				return
+			}
+			fyne.Do(func() {
+				if scanning {
+					return
+				}
+				if currentCacheKey() != loadKey {
+					return
+				}
+				if loadKey == displayedKey {
+					return
+				}
+				if entry == nil {
+					if displayedKey != "" {
+						clearDisplay()
+						displayedKey = ""
+					}
+					return
+				}
+				applyCachedEntry(entry, true)
+				displayedKey = loadKey
+			})
+		}(key, loc, connected)
 	}
 
 	startScan := func() {
