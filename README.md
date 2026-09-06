@@ -111,6 +111,7 @@ When you switch exclusion modes, the current active list is saved to its corresp
 
 - **Filter/Add**: Use the text field at the top to filter existing domains or enter a new domain name
 - **Append**: Click the "Append" button to add the domain from the text field to the exclusion list
+- **Paste**: reads the clipboard on click (or Alt+Ctrl+V on the Domains tab). On Wayland this can briefly freeze the dashboard because clipboard read (`readDataOfferAsString`) blocks the UI thread — a known Fyne/GLFW limit, not a background poller
 - **Remove**: Click the "X" button next to any domain to remove it from the list
 
 ### Import/Export

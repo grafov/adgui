@@ -111,6 +111,7 @@ Kiam vi ŝanĝas ekskluzivan reĝimon, la aktiva listo estas konservita en la re
 
 - **Filtri/aldoni**: uzu la tekstkampon supre por filtri ekzistantajn domajnojn aŭ enigi novan domajnan nomon
 - **Aldoni**: alklaku la butonon «Aldoni» por aldoni la domajnon el la tekstkampo al la ekskluziva listo
+- **Alglui**: legas la tondujon je alklako (aŭ Alt+Ctrl+V en la langeto «Domajnoj»). En Wayland la panelo povas momente frostigi: legado de la tondujo (`readDataOfferAsString`) blokas la UI-fadenon — konata limigo de Fyne/GLFW, ne fona enketo
 - **Forigi**: alklaku la butonon «X» apud iu domajno por forigi ĝin el la listo
 
 ### Importo/Eksporto

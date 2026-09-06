@@ -649,6 +649,9 @@ func (u *UI) exclusionsPanel() *fyne.Container {
 			return container.NewHBox(label, layout.NewSpacer(), removeBtn)
 		},
 		func(id widget.ListItemID, obj fyne.CanvasObject) {
+			if id >= len(filtered) {
+				return
+			}
 			cont := obj.(*fyne.Container)
 			label := cont.Objects[0].(*widget.Label)
 			removeBtn := cont.Objects[2].(*widget.Button)
