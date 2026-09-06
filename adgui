@@ -33,5 +33,4 @@ if [[ -n "$pids" ]]; then
 	kill $pids 2>/dev/null
 fi
 
-exec "$binary" "$@"
-# ^^^ optionally add for debug: >/tmp/adgui.log 2>&1
+exec "$binary" "$@" >/tmp/adgui.log 2>&1

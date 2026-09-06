@@ -111,6 +111,20 @@ dist: release-xlibre release-wayland
 sloc:
 	cloc * >sloc.stats
 
+.PHONY: dump
+dump:
+	@pids=$$(ps x | grep -E '[/]adgui-(wayland|xlibre)$$' | awk '{print $$1}'); \
+	if [ -z "$$pids" ]; then \
+		echo "no adgui-(wayland|xlibre) process found"; \
+		exit 1; \
+	fi; \
+	echo "sending SIGQUIT to $$pids"; \
+	kill -QUIT $$pids
+
+.PHONY: check-threads
+check-threads:
+	@grep -n "Error in Fyne call thread" /tmp/adgui.log || true
+
 .PHONY: clean
 clean:
 	$(GOCLEAN)
