@@ -96,9 +96,6 @@ type (
 		locationWindow fyne.Window
 		locationShown  bool
 
-		// Hidden window for modal prompts when dashboard is closed
-		promptWindow fyne.Window
-
 		// and...
 		withLogicIncluded
 	}
@@ -169,17 +166,10 @@ func (u *UI) createTrayMenu() {
 	})
 	quitItem := fyne.NewMenuItem(lang.X("tray.menu.quit", "Quit"), func() {
 		parent := u.activeWindow()
-		usedPrompt := parent == u.promptWindow
-		if usedPrompt {
-			parent.SetTitle(lang.X("tray.menu.quit.confirm.title", "Quit"))
-		}
 		dialog.ShowConfirm(
 			lang.X("tray.menu.quit.confirm.title", "Quit"),
 			lang.X("tray.menu.quit.confirm.message", "Are you sure you want to quit?"),
 			func(ok bool) {
-				if usedPrompt && u.promptWindow != nil {
-					u.promptWindow.Hide()
-				}
 				if !ok {
 					return
 				}
@@ -403,11 +393,18 @@ func (u *UI) setLocationShown(shown bool) {
 	u.locationmx.Unlock()
 }
 
+// Dashboard shows the main control window. On X11 the same window is reused after
+// Hide(); Close() is avoided there because Fyne 2.7.4 can still deliver mouse
+// events after the GLFW closing flag is set and panic in processMouseMoved.
+// On Wayland, Hide()+Show() destroys and recreates the xdg_toplevel with
+// blocking compositor roundtrips on the Fyne main thread, so the window is
+// Closed and rebuilt on the next open. The system tray keeps the app alive.
 func (u *UI) Dashboard() string {
+	if u.revealDashboard() {
+		return ""
+	}
+
 	u.dashboardmx.Lock()
-	// Reuse a hidden dashboard instead of Close(): Close() sets the GLFW driver's
-	// closing flag while GLFW can still deliver cursor/mouse events, which can panic
-	// inside Fyne's processMouseMoved (nil view). Hide() does not set closing.
 	if u.dashboardWindow != nil {
 		u.dashboardWindow.Show()
 		u.dashboardShown = true
@@ -434,17 +431,18 @@ func (u *UI) Dashboard() string {
 	tabs.SetTabLocation(container.TabLocationLeading)
 	window.SetContent(tabs)
 
-	// Hide on Esc (see Close vs Hide note above)
+	window.SetOnClosed(func() {
+		u.releaseDashboardWindow(window)
+	})
+
 	window.Canvas().SetOnTypedKey(func(k *fyne.KeyEvent) {
-		if k.Name == fyne.KeyEscape {
-			window.Hide()
-			u.setDashboardShown(false)
+		if k.Name == fyne.KeyEscape && !windowHasOverlays(window) {
+			dismissWindow(window, func() { u.setDashboardShown(false) })
 		}
 	})
 
 	window.SetCloseIntercept(func() {
-		window.Hide()
-		u.setDashboardShown(false)
+		dismissWindow(window, func() { u.setDashboardShown(false) })
 	})
 
 	u.dashboardmx.Lock()
@@ -932,6 +930,8 @@ func (u *UI) exclusionsPanel() *fyne.Container {
 	return content
 }
 
+// LocationSelector opens the VPN location picker. Window lifetime follows
+// reuseHiddenWindows: Hide/Show reuse on X11, Close and rebuild on Wayland.
 func (u *UI) LocationSelector() {
 	u.locationmx.Lock()
 	defer u.locationmx.Unlock()
@@ -997,9 +997,11 @@ func (u *UI) LocationSelector() {
 	window.Resize(fyne.NewSize(700, 720))
 	u.locationWindow = window
 
+	window.SetOnClosed(func() {
+		u.releaseLocationWindow(window)
+	})
 	window.SetCloseIntercept(func() {
-		window.Hide()
-		u.setLocationShown(false)
+		dismissWindow(window, func() { u.setLocationShown(false) })
 	})
 
 	filterEntry := widget.NewEntry()
@@ -1172,8 +1174,7 @@ func (u *UI) LocationSelector() {
 		fmt.Printf("Selected: %+v\n", selectedLocation)
 		u.runPrivileged(func() {
 			fyne.Do(func() {
-				window.Hide()
-				u.setLocationShown(false)
+				dismissWindow(window, func() { u.setLocationShown(false) })
 			})
 			u.vpnmgr.ConnectToLocation(selectedLocation)
 		})
@@ -1188,9 +1189,8 @@ func (u *UI) LocationSelector() {
 	window.SetContent(content)
 
 	window.Canvas().SetOnTypedKey(func(k *fyne.KeyEvent) {
-		if k.Name == fyne.KeyEscape {
-			window.Hide()
-			u.setLocationShown(false)
+		if k.Name == fyne.KeyEscape && !windowHasOverlays(window) {
+			dismissWindow(window, func() { u.setLocationShown(false) })
 		}
 	})
 

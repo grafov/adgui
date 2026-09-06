@@ -28,11 +28,6 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-const (
-	promptWindowWidth  float32 = 220
-	promptWindowHeight float32 = 180
-)
-
 var errSudoPromptCancelled = errors.New("sudo password prompt cancelled")
 
 func (u *UI) installSudoPasswordPrompt() {
@@ -55,7 +50,10 @@ type sudoPromptResult struct {
 
 func (u *UI) showSudoPasswordDialog(resultCh chan<- sudoPromptResult) {
 	window := u.activeWindow()
-	usedPromptWindow := window == u.promptWindow
+	if window == nil {
+		resultCh <- sudoPromptResult{err: errSudoPromptCancelled}
+		return
+	}
 
 	prompt := widget.NewLabel(lang.X("sudo.prompt.message", "Enter your password to manage VPN connections:"))
 	prompt.Wrapping = fyne.TextWrapWord
@@ -63,7 +61,6 @@ func (u *UI) showSudoPasswordDialog(resultCh chan<- sudoPromptResult) {
 	passEntry := widget.NewPasswordEntry()
 	passEntry.SetPlaceHolder(lang.X("sudo.prompt.placeholder", "Password"))
 
-	// Prompt on the first line, password field full-width below it.
 	content := container.NewVBox(prompt, passEntry)
 
 	d := dialog.NewCustomConfirm(
@@ -72,9 +69,6 @@ func (u *UI) showSudoPasswordDialog(resultCh chan<- sudoPromptResult) {
 		lang.X("sudo.prompt.cancel", "Cancel"),
 		content,
 		func(confirmed bool) {
-			if usedPromptWindow && u.promptWindow != nil {
-				u.promptWindow.Hide()
-			}
 			if !confirmed {
 				resultCh <- sudoPromptResult{err: errSudoPromptCancelled}
 				return
@@ -93,7 +87,6 @@ func (u *UI) showSudoPasswordDialog(resultCh chan<- sudoPromptResult) {
 	window.Canvas().Focus(passEntry)
 }
 
-// activeWindow picks a visible parent for modal dialogs (Wayland requires a shown window).
 func (u *UI) activeWindow() fyne.Window {
 	u.locationmx.RLock()
 	loc := u.locationWindow
@@ -111,25 +104,10 @@ func (u *UI) activeWindow() fyne.Window {
 		return dash
 	}
 
-	return u.ensurePromptWindow(lang.X("sudo.prompt.title", "Administrator Authentication"))
-}
-
-func (u *UI) ensurePromptWindow(title string) fyne.Window {
-	if u.promptWindow == nil {
-		w := u.Fyne.NewWindow(title)
-		w.SetContent(container.NewStack())
-		w.SetFixedSize(true)
-		w.SetCloseIntercept(func() {
-			w.Hide()
-		})
-		u.promptWindow = w
-	}
-	u.promptWindow.SetTitle(title)
-	u.promptWindow.Resize(fyne.NewSize(promptWindowWidth, promptWindowHeight))
-	u.promptWindow.CenterOnScreen()
-	u.promptWindow.Show()
-	u.promptWindow.CenterOnScreen()
-	return u.promptWindow
+	u.Dashboard()
+	u.dashboardmx.RLock()
+	defer u.dashboardmx.RUnlock()
+	return u.dashboardWindow
 }
 
 func (u *UI) runPrivileged(action func()) {
