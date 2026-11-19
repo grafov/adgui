@@ -220,6 +220,7 @@ Kio estis farita de homo?
 ## Similaj projektoj
 
 - https://github.com/SpazzRabbit/adguardvpn-gui - bela GUI en Python+QT
+- https://github.com/bolikcraft/vantah - GUI kun fenestro kaj pleto en C#/Avalonia, kun pakoj por Arch, Debian/Ubuntu, Fedora kaj openSUSE
 
 ## Starware
 

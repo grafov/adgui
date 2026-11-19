@@ -220,6 +220,7 @@ What was done by a human?
 ## Similar projects
 
 - https://github.com/SpazzRabbit/adguardvpn-gui - nice and clean GUI in Python+QT
+- https://github.com/bolikcraft/vantah - desktop and tray GUI in C#/Avalonia, packaged for Arch, Debian/Ubuntu, Fedora and openSUSE
 
 ## Starware
 
