@@ -27,6 +27,7 @@ Mallonga [demonstrado en Youtube](https://www.youtube.com/shorts/UpstI1BD-rE).
 - **Funkcioj de adguardvpn-cli** — administrado de retejaj ekskluzivoj (ĝenerala/selektiva), konekto el listo de lokoj, taskopleto por konekti/malkonekti
 - **Kontrolo de IP-regiono** — kiel GeoIP-servoj klasifikas vian eliran IP; tiu kontrolo ne estas en la CLI
 - **sudo por TUN** — subtenas la privilegiitan `sudo`-fluon, kiun `adguardvpn-cli` bezonas en TUN-reĝimo (askpass-dialogo aŭ passwordless `sudo -n`)
+- **Rezerva DNS** — se la CLI ne povis agordi la sisteman DNS, adgui anstataŭigas `/etc/resolv.conf` kaj restarigas la antaŭan dosieron ĉe malkonekto
 
 ## Lokalizado
 
@@ -81,8 +82,15 @@ En `~/.config/adgui/adguirc` vi povas agordi (je unua lanĉo adgui kreas tiun ŝ
 - `ADGUARD_KILL_CMD` — neinteraga kill-komando (ekz. `/usr/bin/sudo -n kill -TERM`)
 - `ADGUARD_SUDO_WRAP=0` — tute malŝalti la wrapper-on (sencimigo / plene passwordless)
 - `ADGUARD_SUDO_ASKPASS=0` — teni la wrapper-on sed neniam peti pasvorton; nur `sudo -n` (por passwordless sudoers)
+- `ADGUARD_MANAGE_DNS=0` — ne anstataŭigi `/etc/resolv.conf`, kiam la CLI ne povis agordi la sisteman DNS (defaŭlte ŝaltita)
 
 Prioritato: medio-variablo → aktiva ŝlosilo en `adguirc` → defaŭlta valoro en la kodo.
+
+### DNS
+
+`adguardvpn-cli` mem agordas la sisteman DNS kiam ĝi povas (ekzemple per systemd-resolved). Se la eligo de `status` aŭ `connect` enhavas `System DNS could not be configured`, la CLI lasas resolv.conf ĉe la vojo en tiu mesaĝo, aŭ en `~/.local/share/adguardvpn-cli/resolv.conf`. Kiam `ADGUARD_MANAGE_DNS` estas ŝaltita (la defaŭlto), adgui konservas la nunan `/etc/resolv.conf` — ordinaran dosieron kune kun ĝia reĝimo, aŭ simbolan ligilon, lasante la celan dosieron netuŝita — en `$XDG_DATA_HOME/adgui/dns/` (`~/.local/share/adgui/dns/` se `XDG_DATA_HOME` ne estas agordita) kaj anstataŭigas `/etc/resolv.conf` per `sudo`. Malkonekto remetas tiun konservitan dosieron aŭ ligilon, dum la kopio de adgui ankoraŭ estas en loko. Se alia programo reverkis la dosieron dum la seanco, ĝuste tiu pli nova enhavo estas restarigita; se la dosiero estas denove reverkita antaŭ malkonekto, ĝi restas tia, kia ĝi estas. Eliri el adgui lasas DNS senŝanĝa dum la VPN restas konektita. Jam farita sekurkopio estas restarigita eĉ post malŝalto de la opcio.
+
+Passwordless sudo, kiu permesas nur listigitajn komandojn, devas ankaŭ permesi `install`, `mv` kaj `ln`.
 
 ## Funkcioj
 

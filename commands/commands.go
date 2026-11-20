@@ -21,12 +21,14 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
 
+	"adgui/commands/resolvconf"
 	"adgui/commands/sudowrap"
 	"adgui/config"
 	"adgui/locations"
@@ -100,6 +102,14 @@ type VPNManager struct {
 	lastStatusLog      string
 	locationsCache     []locations.Location
 	locationsCacheTime time.Time
+	// connSeq increments on connect and disconnect. A status poll samples it
+	// before calling the CLI and drops the result when the value changed, so a
+	// stale poll cannot undo a newer resolv.conf apply or restore.
+	connSeq uint64
+
+	// dnsMx guards resolv.conf apply and restore.
+	dnsMx sync.Mutex
+	dns   *resolvconf.Manager
 
 	// connection history (historyMx)
 	historyMx        sync.Mutex
@@ -147,6 +157,7 @@ func New() *VPNManager {
 		mgr.sudoEnv = sudoEnv
 	}
 
+	mgr.initDNS()
 	go mgr.statusCheckLoop()
 	return &mgr
 }
@@ -464,11 +475,15 @@ func (v *VPNManager) ConnectAuto() {
 		fmt.Printf("sudo auth error: %v\n", err)
 		return
 	}
+	seq := v.connectionSeq()
 	// Получаем список локаций
 	output, err := v.executeCommand("connect")
 	if err != nil {
 		fmt.Printf("Could not connect: %s: %s\n", err, output)
 		return
+	}
+	if newSeq, ok := v.tryBump(seq); ok {
+		v.syncDNS(output, newSeq)
 	}
 	v.RequestStatusCheck()
 }
@@ -495,15 +510,20 @@ func (v *VPNManager) ConnectToLocation(loc locations.Location) {
 		fmt.Printf("sudo auth error: %v\n", err)
 		return
 	}
+	seq := v.connectionSeq()
 	output, err := v.executeCommand("connect", "-l", loc.City)
 	if err != nil {
 		fmt.Printf("Connect to location error: %v\nOutput: %s\n", err, output)
 		return
 	}
-
+	newSeq, ok := v.tryBump(seq)
+	if !ok {
+		return
+	}
 	if strings.Contains(output, statusConnectedTo) {
 		v.applyConnected(loc)
 	}
+	v.syncDNS(output, newSeq)
 }
 
 func (v *VPNManager) applyConnected(loc locations.Location) {
@@ -650,9 +670,14 @@ func (v *VPNManager) Disconnect() {
 		fmt.Printf("sudo auth error: %v\n", err)
 		return
 	}
+	seq := v.connectionSeq()
 	output, err := v.executeCommand("disconnect")
 	if err != nil {
 		fmt.Printf("Disconnect error: %v\nOutput: %s\n", err, output)
+		return
+	}
+	newSeq, ok := v.tryBump(seq)
+	if !ok {
 		return
 	}
 
@@ -660,6 +685,7 @@ func (v *VPNManager) Disconnect() {
 	v.status = statusDisconnected
 	v.statemx.Unlock()
 	v.applyDisconnected()
+	v.restoreDNS(newSeq)
 }
 
 func (v *VPNManager) License() string {
@@ -783,11 +809,17 @@ func (v *VPNManager) shouldLogStatusCheck(key string) bool {
 }
 
 func (v *VPNManager) checkStatus() {
+	seq := v.connectionSeq()
 	output, err := v.executeCommand("status")
 	if err != nil {
 		if v.shouldLogStatusCheck("error:" + err.Error()) {
 			fmt.Printf("Status check error: %v\n", err)
 		}
+		return
+	}
+
+	// A connect or disconnect that landed while this poll was running owns DNS.
+	if v.connectionSeq() != seq {
 		return
 	}
 
@@ -801,12 +833,153 @@ func (v *VPNManager) checkStatus() {
 			fmt.Printf("status check: disconnected\n")
 		}
 		v.applyDisconnected()
-	} else if strings.Contains(output, "Connected to") {
+		v.restoreDNS(seq)
+		return
+	}
+	if strings.Contains(output, "Connected to") {
 		locationName := ParseLocationFromStatus(output)
 		loc := v.resolveLocation(locationName)
+		if v.connectionSeq() != seq {
+			return
+		}
 		if v.shouldLogStatusCheck("connected:" + locationName) {
 			fmt.Printf("status check: connected to %s\n", locationName)
 		}
 		v.applyConnected(loc)
+		v.syncDNS(output, seq)
 	}
+}
+
+func (v *VPNManager) initDNS() {
+	base, err := GetDataDir()
+	if err != nil {
+		fmt.Printf("dns state dir error: %v\n", err)
+		return
+	}
+	dir := filepath.Join(base, "dns")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		fmt.Printf("dns state dir error: %v\n", err)
+		return
+	}
+	v.dns = &resolvconf.Manager{
+		Target:   resolvconf.DefaultTarget,
+		StateDir: dir,
+		Run:      v.runPrivileged,
+	}
+}
+
+func (v *VPNManager) connectionSeq() uint64 {
+	v.statemx.Lock()
+	defer v.statemx.Unlock()
+	return v.connSeq
+}
+
+func (v *VPNManager) tryBump(seen uint64) (uint64, bool) {
+	v.statemx.Lock()
+	defer v.statemx.Unlock()
+	if v.connSeq != seen {
+		return 0, false
+	}
+	v.connSeq++
+	return v.connSeq, true
+}
+
+func (v *VPNManager) syncDNS(output string, seq uint64) {
+	v.dnsMx.Lock()
+	defer v.dnsMx.Unlock()
+	if v.dns == nil || v.connectionSeq() != seq {
+		return
+	}
+	enabled, err := config.AdguardManageDNSEnabled()
+	if err != nil {
+		v.logDNS("config:"+err.Error(), "dns config read error: %v\n", err)
+		return
+	}
+	if !enabled {
+		return
+	}
+	needed, path := ParseDNSWarning(output)
+	if !needed {
+		return
+	}
+	if path == "" {
+		path, err = adguardResolvConfPath()
+		if err != nil {
+			v.logDNS("path:"+err.Error(), "dns path error: %v\n", err)
+			return
+		}
+	}
+	if err := v.dns.Apply(path); err != nil {
+		v.logDNS("apply:"+err.Error(), "dns apply error: %v\n", err)
+	}
+}
+
+func (v *VPNManager) restoreDNS(seq uint64) {
+	v.dnsMx.Lock()
+	defer v.dnsMx.Unlock()
+	if v.dns == nil || !v.dns.Pending() || v.connectionSeq() != seq {
+		return
+	}
+	if err := v.dns.Restore(); err != nil {
+		v.logDNS("restore:"+err.Error(), "dns restore error: %v\n", err)
+	}
+}
+
+func (v *VPNManager) logDNS(key, format string, args ...any) {
+	if v.shouldLogStatusCheck("dns:" + key) {
+		fmt.Printf(format, args...)
+	}
+}
+
+func adguardResolvConfPath() (string, error) {
+	if xdg := strings.TrimSpace(os.Getenv("XDG_DATA_HOME")); xdg != "" {
+		return filepath.Join(xdg, "adguardvpn-cli", "resolv.conf"), nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("resolve adguard resolv.conf path: %w", err)
+	}
+	return filepath.Join(home, ".local", "share", "adguardvpn-cli", "resolv.conf"), nil
+}
+
+func (v *VPNManager) runPrivileged(name string, args ...string) error {
+	if strings.TrimSpace(name) == "" {
+		return errors.New("privileged command name is required")
+	}
+	if v.sudoEnv == nil {
+		return errors.New("sudo environment is not initialized")
+	}
+	if err := v.ensureSudoNonInteractive(); err != nil {
+		return err
+	}
+	cmd, err := v.sudoEnv.Command(name, args...)
+	if err != nil {
+		return err
+	}
+	var buf bytes.Buffer
+	cmd.Stdout = &buf
+	cmd.Stderr = &buf
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	_, done := v.registerCommand(name, args, cmd)
+	defer done()
+	if err := cmd.Wait(); err != nil {
+		msg := strings.TrimSpace(buf.String())
+		if msg == "" {
+			return fmt.Errorf("privileged %s: %w", name, err)
+		}
+		return fmt.Errorf("privileged %s: %w (%s)", name, err, msg)
+	}
+	return nil
+}
+
+func (v *VPNManager) ensureSudoNonInteractive() error {
+	if v.sudoEnv == nil || !v.sudoEnv.Enabled() || !v.sudoEnv.AskpassEnabled() {
+		return nil
+	}
+	if sudowrap.ValidTicket("") || v.sudoEnv.PassFileExists() {
+		return nil
+	}
+	return ErrSudoPasswordRequired
 }

@@ -32,6 +32,7 @@ func TestEnsureAdguircCreatesFile(t *testing.T) {
 		keyAdguardKillCmd:     "Optional kill command prefix; PID is appended.",
 		keyAdguardSudoWrap:    "Inject private sudo PATH wrapper. Values: true, false.",
 		keyAdguardSudoAskpass: "Show GUI sudo password dialog. Values: true, false.",
+		keyAdguardManageDNS:   "Replace /etc/resolv.conf while connected. Values: true, false.",
 	}
 	if err := EnsureAdguirc(header, comments); err != nil {
 		t.Fatal(err)
@@ -61,6 +62,9 @@ func TestEnsureAdguircCreatesFile(t *testing.T) {
 	}
 	if !strings.Contains(content, "# "+comments[keyAdguardSudoAskpass]+"\n# ADGUARD_SUDO_ASKPASS=true\n") {
 		t.Fatalf("expected ADGUARD_SUDO_ASKPASS comment and key, got:\n%s", content)
+	}
+	if !strings.Contains(content, "# "+comments[keyAdguardManageDNS]+"\n# ADGUARD_MANAGE_DNS=true\n") {
+		t.Fatalf("expected ADGUARD_MANAGE_DNS comment and key, got:\n%s", content)
 	}
 }
 
@@ -255,6 +259,66 @@ func TestAdguardSudoAskpassEnabledConfigFile(t *testing.T) {
 	}
 	if enabled {
 		t.Fatal("expected sudo askpass disabled from config")
+	}
+}
+
+func TestAdguardManageDNSEnabledDefault(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("ADGUARD_MANAGE_DNS", "")
+
+	enabled, err := AdguardManageDNSEnabled()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !enabled {
+		t.Fatal("expected DNS management enabled by default")
+	}
+}
+
+func TestAdguardManageDNSEnabledEnvOverride(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("ADGUARD_MANAGE_DNS", "0")
+
+	enabled, err := AdguardManageDNSEnabled()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if enabled {
+		t.Fatal("expected DNS management disabled from env")
+	}
+}
+
+func TestAdguardManageDNSEnabledConfigFile(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("ADGUARD_MANAGE_DNS", "")
+
+	writeConfigFile(t, home, "ADGUARD_MANAGE_DNS=false\n")
+
+	enabled, err := AdguardManageDNSEnabled()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if enabled {
+		t.Fatal("expected DNS management disabled from config")
+	}
+}
+
+func TestAdguardManageDNSEnabledEnvOverridesFile(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("ADGUARD_MANAGE_DNS", "1")
+
+	writeConfigFile(t, home, "ADGUARD_MANAGE_DNS=false\n")
+
+	enabled, err := AdguardManageDNSEnabled()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !enabled {
+		t.Fatal("expected DNS management enabled from env over config")
 	}
 }
 

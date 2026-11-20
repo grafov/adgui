@@ -17,6 +17,11 @@ package commands
 
 import "strings"
 
+const (
+	dnsNotConfigured = "System DNS could not be configured"
+	dnsSavedPrefix   = "DNS configuration is saved to "
+)
+
 // ParseLocationFromStatus extracts the connected city/location name from CLI status output.
 func ParseLocationFromStatus(output string) string {
 	for line := range strings.SplitSeq(output, "\n") {
@@ -36,4 +41,36 @@ func ParseLocationFromStatus(output string) string {
 		return strings.TrimSpace(location)
 	}
 	return ""
+}
+
+// ParseDNSWarning reports whether CLI output says the system resolver was left
+// unchanged. needed is true when queries may bypass the tunnel. path is the
+// resolv.conf the CLI wrote, taken from the "DNS configuration is saved to"
+// sentence; it is empty when that sentence is absent and the caller should use
+// the default adguardvpn-cli path.
+func ParseDNSWarning(output string) (needed bool, path string) {
+	output = ansiStripRegex.ReplaceAllString(output, "")
+	if !strings.Contains(output, dnsNotConfigured) {
+		return false, ""
+	}
+	for line := range strings.SplitSeq(output, "\n") {
+		idx := strings.Index(line, dnsSavedPrefix)
+		if idx < 0 {
+			continue
+		}
+		return true, dnsPathFromLine(line[idx+len(dnsSavedPrefix):])
+	}
+	return true, ""
+}
+
+func dnsPathFromLine(rest string) string {
+	rest = strings.TrimSpace(rest)
+	if rest == "" {
+		return ""
+	}
+	if i := strings.Index(rest, ". "); i >= 0 {
+		return rest[:i]
+	}
+	field := strings.Fields(rest)[0]
+	return strings.TrimRight(field, ".")
 }

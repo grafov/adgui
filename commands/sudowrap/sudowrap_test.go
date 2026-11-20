@@ -211,4 +211,37 @@ var _ = Describe("sudowrap", func() {
 		Expect(env.AskpassEnabled()).To(BeFalse())
 		Expect(env.Dir()).To(BeEmpty())
 	})
+
+	It("Command uses the private sudo wrapper when the wrapper is enabled", func() {
+		env, err := sudowrap.Setup(true, true)
+		Expect(err).NotTo(HaveOccurred())
+		defer func() { _ = env.Close() }()
+
+		cmd, err := env.Command("install", "-m", "0644", "src", "dst")
+		Expect(err).NotTo(HaveOccurred())
+
+		wrapper := filepath.Join(env.Dir(), "sudo")
+		Expect(cmd.Path).To(Equal(wrapper))
+		Expect(cmd.Args).To(Equal([]string{wrapper, "install", "-m", "0644", "src", "dst"}))
+		Expect(cmd.Stdin).To(BeNil())
+		Expect(cmd.SysProcAttr).NotTo(BeNil())
+		Expect(cmd.SysProcAttr.Setsid).To(BeTrue())
+		Expect(strings.Join(cmd.Env, "\n")).To(ContainSubstring("SUDO_ASKPASS="))
+		Expect(strings.Join(cmd.Env, "\n")).To(ContainSubstring(env.Dir()))
+	})
+
+	It("Command uses sudo -n when the wrapper is disabled", func() {
+		env, err := sudowrap.Setup(false, false)
+		Expect(err).NotTo(HaveOccurred())
+		defer func() { _ = env.Close() }()
+
+		cmd, err := env.Command("mv", "-f", "src", "dst")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(cmd.Args).To(Equal([]string{cmd.Path, "-n", "mv", "-f", "src", "dst"}))
+		Expect(cmd.Path).To(HaveSuffix("/sudo"))
+		Expect(cmd.Env).To(BeNil())
+		Expect(cmd.Stdin).To(BeNil())
+		Expect(cmd.SysProcAttr).NotTo(BeNil())
+		Expect(cmd.SysProcAttr.Setsid).To(BeTrue())
+	})
 })

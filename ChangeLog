@@ -1,3 +1,22 @@
+2026-11-20  Alexander I.Grafov  <grafov@inet.name>
+
+	* go.mod, go.sum: golangci-lint 2.15.0, so `make lint` can read
+	  Go 1.27 export data.
+
+2026-11-20  Alexander I.Grafov  <grafov@inet.name>
+
+	* config/config.go, cmd/adgui/main.go, ui/translation: added
+	  ADGUARD_MANAGE_DNS (default on) so resolv.conf replacement can be
+	  turned off.
+	* commands/resolvconf, commands/commands.go,
+	  commands/status_parse.go, commands/sudowrap/sudowrap.go: when
+	  adguardvpn-cli reports that system DNS was not configured, replace
+	  /etc/resolv.conf with the CLI file via sudo and restore the previous
+	  file or symlink on disconnect.
+	* commands/sudowrap/sudowrap.go: pass empty TERM and SHELL into the
+	  child environment so bash used as /bin/sh does not refill them.
+	* README.md, README.ru.md, README.eo.md: document DNS management.
+
 2026-09-07  Alexander I.Grafov  <grafov@inet.name>
 
 	* ui/window_lifecycle.go, ui/window_lifecycle_wayland.go,

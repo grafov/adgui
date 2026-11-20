@@ -229,7 +229,52 @@ var _ = Describe("Command Queue Tracking and Killing", func() {
 	})
 })
 
+var _ = Describe("ParseDNSWarning", func() {
+	It("reads the saved path from the CLI message", func() {
+		output := "Connected to RIGA in TUN mode, running on tun0\n" +
+			"Warning: System DNS could not be configured. DNS queries may bypass the VPN tunnel\n" +
+			"DNS configuration is saved to /home/a/.local/share/adguardvpn-cli/resolv.conf. " +
+			"You can apply it manually by specifying this file as a source for your resolv.conf management software\n"
+
+		needed, path := commands.ParseDNSWarning(output)
+		Expect(needed).To(BeTrue())
+		Expect(path).To(Equal("/home/a/.local/share/adguardvpn-cli/resolv.conf"))
+	})
+
+	It("accepts a path that ends the line", func() {
+		output := "Warning: System DNS could not be configured. DNS queries may bypass the VPN tunnel\n" +
+			"DNS configuration is saved to /tmp/resolv.conf.\n"
+
+		needed, path := commands.ParseDNSWarning(output)
+		Expect(needed).To(BeTrue())
+		Expect(path).To(Equal("/tmp/resolv.conf"))
+	})
+
+	It("reports the warning without a path in the reference status", func() {
+		data, err := os.ReadFile("../cli-reference-output/status")
+		Expect(err).NotTo(HaveOccurred())
+
+		needed, path := commands.ParseDNSWarning(string(data))
+		Expect(needed).To(BeTrue())
+		Expect(path).To(BeEmpty())
+	})
+
+	It("ignores output that does not mention DNS", func() {
+		needed, path := commands.ParseDNSWarning("VPN is disconnected\n")
+		Expect(needed).To(BeFalse())
+		Expect(path).To(BeEmpty())
+	})
+})
+
 var _ = Describe("RequestStatusCheck", func() {
+	BeforeEach(func() {
+		Expect(os.Setenv("ADGUARD_MANAGE_DNS", "0")).To(Succeed())
+	})
+
+	AfterEach(func() {
+		Expect(os.Unsetenv("ADGUARD_MANAGE_DNS")).To(Succeed())
+	})
+
 	It("does not block when a check is already queued", func() {
 		mgr := commands.New()
 		defer func() { _ = mgr.Close() }()

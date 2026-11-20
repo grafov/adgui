@@ -27,6 +27,7 @@ Short [demo on Youtube](https://www.youtube.com/shorts/UpstI1BD-rE).
 - **adguardvpn-cli features** — manage site exclusions (general/selective), connect from the location list, tray actions for connect/disconnect
 - **IP region check** — see how GeoIP services classify your egress IP; this check is not part of the CLI
 - **sudo for TUN** — works with the privileged `sudo` flow that `adguardvpn-cli` needs in TUN mode (askpass dialog or passwordless `sudo -n`)
+- **DNS fallback** — when the CLI cannot configure system DNS, adgui installs its resolv.conf over `/etc/resolv.conf` and restores the previous file on disconnect
 
 ## Localization
 
@@ -81,8 +82,15 @@ In `~/.config/adgui/adguirc` you can set (on first launch adgui creates this tem
 - `ADGUARD_KILL_CMD` — non-interactive kill prefix (e.g. `/usr/bin/sudo -n kill -TERM`)
 - `ADGUARD_SUDO_WRAP=0` — disable the wrapper entirely (debugging / fully passwordless setups)
 - `ADGUARD_SUDO_ASKPASS=0` — keep the wrapper but never prompt for a password; only `sudo -n` (for passwordless sudoers)
+- `ADGUARD_MANAGE_DNS=0` — do not replace `/etc/resolv.conf` when the CLI cannot configure system DNS (default: enabled)
 
 Priority: environment variable → active key in `adguirc` → code default.
+
+### DNS
+
+`adguardvpn-cli` configures system DNS itself when it can (for example through systemd-resolved). When `status` or `connect` prints `System DNS could not be configured`, the CLI leaves a resolv.conf at the path in that message, or at `~/.local/share/adguardvpn-cli/resolv.conf`. With `ADGUARD_MANAGE_DNS` enabled (the default), adgui saves the current `/etc/resolv.conf` — a regular file together with its mode, or a symlink whose target stays untouched — under `$XDG_DATA_HOME/adgui/dns/` (`~/.local/share/adgui/dns/` when `XDG_DATA_HOME` is unset) and replaces `/etc/resolv.conf` via `sudo`. Disconnect puts that saved file or symlink back while adgui's copy is still in place. A rewrite by another program during the session becomes the backup that is restored; a file that was rewritten again before disconnect stays as it is. Quitting adgui leaves DNS in place while the VPN stays connected. A backup already taken is restored even after the option is turned off.
+
+Passwordless sudo limited to specific commands also needs `install`, `mv`, and `ln`.
 
 ## Features
 

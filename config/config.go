@@ -32,6 +32,7 @@ const (
 	keyAdguardKillCmd     = "ADGUARD_KILL_CMD"
 	keyAdguardSudoWrap    = "ADGUARD_SUDO_WRAP"
 	keyAdguardSudoAskpass = "ADGUARD_SUDO_ASKPASS"
+	keyAdguardManageDNS   = "ADGUARD_MANAGE_DNS"
 )
 
 // EnsureAdguirc creates ~/.config/adgui/adguirc when it is missing.
@@ -84,6 +85,7 @@ func buildAdguircTemplate(headerComment string, keyComments map[string]string) s
 		{keyAdguardKillCmd, ""},
 		{keyAdguardSudoWrap, "true"},
 		{keyAdguardSudoAskpass, "true"},
+		{keyAdguardManageDNS, "true"},
 	}
 	for _, item := range defaults {
 		if comment := strings.TrimSpace(keyComments[item.key]); comment != "" {
@@ -116,6 +118,16 @@ func AdguardSudoWrapEnabled() (bool, error) {
 // Set ADGUARD_SUDO_ASKPASS=0/false/no in environment or adguirc to disable (passwordless sudo).
 func AdguardSudoAskpassEnabled() (bool, error) {
 	return boolConfigDefaultTrue(keyAdguardSudoAskpass)
+}
+
+// AdguardManageDNSEnabled reports whether adgui should publish the VPN resolv.conf
+// over /etc/resolv.conf while the tunnel is up and restore the previous file on
+// disconnect. Default is true.
+// Set ADGUARD_MANAGE_DNS=0/false/no in the environment or adguirc to leave system
+// DNS entirely to adguardvpn-cli. A backup taken before the option was turned off
+// is still restored on disconnect.
+func AdguardManageDNSEnabled() (bool, error) {
+	return boolConfigDefaultTrue(keyAdguardManageDNS)
 }
 
 func boolConfigDefaultTrue(key string) (bool, error) {

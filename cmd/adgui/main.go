@@ -58,6 +58,10 @@ func main() {
 				"config.adguirc.ADGUARD_SUDO_ASKPASS",
 				"Show GUI sudo password dialog. Values: true, false (also 1/0, yes/no, on/off).",
 			),
+			"ADGUARD_MANAGE_DNS": lang.X(
+				"config.adguirc.ADGUARD_MANAGE_DNS",
+				"Replace /etc/resolv.conf with the AdGuard VPN DNS while connected, and restore the previous file on disconnect. Values: true, false (also 1/0, yes/no, on/off).",
+			),
 		},
 	); err != nil {
 		fyne.LogError("failed to create config file", err)

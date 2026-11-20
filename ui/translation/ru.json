@@ -15,6 +15,7 @@
     "cmd_queue.started": "Запущено: {{.Time}}",
     "config.adguirc.ADGUARD_CMD": "Путь к adguardvpn-cli. Пример: /usr/bin/adguardvpn-cli",
     "config.adguirc.ADGUARD_KILL_CMD": "Необязательный префикс kill-команды; PID дописывается в конец. Пример: /usr/bin/sudo -n kill -TERM. Пусто — штатный SIGTERM/Kill.",
+    "config.adguirc.ADGUARD_MANAGE_DNS": "Подменять /etc/resolv.conf на DNS AdGuard VPN на время подключения и возвращать прежний файл при отключении. Значения: true, false (также 1/0, yes/no, on/off).",
     "config.adguirc.ADGUARD_SUDO_ASKPASS": "Показывать GUI-диалог пароля sudo. Значения: true, false (также 1/0, yes/no, on/off).",
     "config.adguirc.ADGUARD_SUDO_WRAP": "Внедрять приватный sudo PATH-wrapper. Значения: true, false (также 1/0, yes/no, on/off).",
     "config.adguirc.header": "Этот конфиг создан adgui со значениями переменных по умолчанию.\nРаскомментарь ключи и проставь им необходимые значения.\nПеременные окружения перекрывают значения в этом файле.\nЕсли переменной нет ни в окружении, ни в этом файле, используется дефолтное значение из кода.",

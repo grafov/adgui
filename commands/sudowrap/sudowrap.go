@@ -40,17 +40,17 @@ const (
 )
 
 var keptExactEnvKeys = map[string]struct{}{
-	"HOME":                    {},
-	"USER":                    {},
-	"LOGNAME":                 {},
-	"XDG_RUNTIME_DIR":         {},
-	"XDG_DATA_HOME":           {},
-	"XDG_CONFIG_HOME":         {},
-	"XDG_CACHE_HOME":          {},
-	"LANG":                    {},
-	"DISPLAY":                 {},
-	"WAYLAND_DISPLAY":         {},
-	"XAUTHORITY":              {},
+	"HOME":                     {},
+	"USER":                     {},
+	"LOGNAME":                  {},
+	"XDG_RUNTIME_DIR":          {},
+	"XDG_DATA_HOME":            {},
+	"XDG_CONFIG_HOME":          {},
+	"XDG_CACHE_HOME":           {},
+	"LANG":                     {},
+	"DISPLAY":                  {},
+	"WAYLAND_DISPLAY":          {},
+	"XAUTHORITY":               {},
 	"DBUS_SESSION_BUS_ADDRESS": {},
 }
 
@@ -244,6 +244,36 @@ func ValidTicket(realSudo string) bool {
 	return cmd.Run() == nil
 }
 
+// Command prepares a privileged command that never prompts on a terminal.
+// When the wrapper is enabled, the command runs through the private sudo wrapper
+// (askpass when a .pass file exists, otherwise sudo -n) and receives the filtered
+// child environment. When the wrapper is disabled, the command is `sudo -n`.
+// The process is placed in a new session with no stdin. The caller starts it.
+func (e *Env) Command(name string, args ...string) (*exec.Cmd, error) {
+	if e == nil {
+		return nil, errors.New("sudo environment is not initialized")
+	}
+	if strings.TrimSpace(name) == "" {
+		return nil, errors.New("command name is required")
+	}
+
+	argv := append([]string{name}, args...)
+	var cmd *exec.Cmd
+	if e.enabled && e.dir != "" {
+		wrapper := filepath.Join(e.dir, sudoName)
+		cmd = exec.Command(wrapper, argv...)
+		cmd.Env = buildChildEnv(e.dir, e.askpass)
+	} else {
+		if e.realSudo == "" {
+			return nil, errors.New("sudo not found")
+		}
+		cmd = exec.Command(e.realSudo, append([]string{"-n"}, argv...)...)
+	}
+	cmd.Stdin = nil
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	return cmd, nil
+}
+
 // Apply injects a filtered child environment with wrapper PATH and SUDO_ASKPASS.
 // Parent process environment is never modified.
 func (e *Env) Apply(cmd *exec.Cmd) {
@@ -269,6 +299,11 @@ func buildChildEnv(wrapperDir string, askpass bool) []string {
 
 	pathValue := wrapperDir + string(os.PathListSeparator) + safePath(os.Getenv("PATH"))
 	out = setEnvVar(out, "PATH", pathValue)
+	// Present but empty: bash used as /bin/sh refills a missing TERM with "dumb"
+	// and a missing SHELL with the login shell, which would leak a terminal hint.
+	for _, key := range []string{"TERM", "COLORTERM", "KONSOLE_VERSION", "SSH_TTY", "SHELL"} {
+		out = setEnvVar(out, key, "")
+	}
 	if askpass {
 		out = setEnvVar(out, "SUDO_ASKPASS", filepath.Join(wrapperDir, askpassName))
 	}
