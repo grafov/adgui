@@ -9,6 +9,10 @@
 	* go.mod, go.sum: fyne.io/fyne/v2 v2.8.2 and fyne.io/tools v1.7.4.
 	  v2.7.4 SIGSEGV in glfwPollEvents after Esc on Wayland survived
 	  Close(); 2.8 picks Wayland at runtime and ships a newer GLFW.
+	* Makefile (release-wayland, release-xlibre): pass `--src .` to
+	  `fyne build`. fyne 1.7.4 looks for go.mod from the package
+	  directory; relative `./cmd/adgui` stopped in `cmd/` and skipped
+	  metadata injection ("file does not exist").
 
 2026-11-20  Alexander I.Grafov  <grafov@inet.name>
 

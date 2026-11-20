@@ -40,13 +40,17 @@ all: build
 build:
 	$(foreach dir,$(wildcard cmd/*), $(GOBUILD) $(FLAGS) -o $(BINDIR)/ ./$(dir);)
 
+# fyne 1.7.4 looks up go.mod starting at the package directory. A relative
+# ./cmd/adgui stops at cmd/ and returns "file does not exist", so metadata
+# injection is skipped. --src . makes that directory absolute and the walk
+# reaches this module's go.mod. The package argument stays ./cmd/adgui.
 .PHONY: release-wayland
 release-wayland: # default build for Wayland (broken yet)
-	GOFLAGS="$(FYNE_GOFLAGS)" go tool fyne build -o build/adgui-wayland --release --tags wayland ./cmd/adgui
+	GOFLAGS="$(FYNE_GOFLAGS)" go tool fyne build -o build/adgui-wayland --release --tags wayland --src . ./cmd/adgui
 
 .PHONY: release-xlibre
 release-xlibre: # build for X11/XLibre
-	GOFLAGS="$(FYNE_GOFLAGS)" go tool fyne build -o build/adgui-xlibre --release --tags x11 ./cmd/adgui
+	GOFLAGS="$(FYNE_GOFLAGS)" go tool fyne build -o build/adgui-xlibre --release --tags x11 --src . ./cmd/adgui
 
 .PHONY: test
 test:
