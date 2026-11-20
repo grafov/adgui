@@ -29,6 +29,9 @@ SUDO?=
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "v0.0.0-dev")
 COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 FLAGS := -buildvcs=false -ldflags "-X main.version=$(VERSION) -X main.gitCommit=$(COMMIT)"
+FYNE_GOFLAGS := -buildvcs=false \
+	-ldflags=-X=main.version=$(VERSION) \
+	-ldflags=-X=main.gitCommit=$(COMMIT)
 
 .PHONY: all
 all: build
@@ -39,11 +42,11 @@ build:
 
 .PHONY: release-wayland
 release-wayland: # default build for Wayland (broken yet)
-	go tool fyne build -o build/adgui-wayland --release --tags wayland ./cmd/adgui
+	GOFLAGS="$(FYNE_GOFLAGS)" go tool fyne build -o build/adgui-wayland --release --tags wayland ./cmd/adgui
 
 .PHONY: release-xlibre
 release-xlibre: # build for X11/XLibre
-	go tool fyne build -o build/adgui-xlibre --release --tags x11 ./cmd/adgui
+	GOFLAGS="$(FYNE_GOFLAGS)" go tool fyne build -o build/adgui-xlibre --release --tags x11 ./cmd/adgui
 
 .PHONY: test
 test:
