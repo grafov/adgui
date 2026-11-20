@@ -32,7 +32,10 @@ type connectionsPanelWidgets struct {
 	cityLabel      *canvas.Text
 	countryLabel   *canvas.Text
 	pingLabel      *canvas.Text
+	dnsLabel       *canvas.Text
+	dnsRow         *fyne.Container
 	statusLabel    *canvas.Text
+	statusBox      *fyne.Container
 	historyBox     *fyne.Container
 	historySection *fyne.Container
 	historyLabels  []*widget.Label
@@ -43,6 +46,7 @@ func (u *UI) connectionsPanel() (*fyne.Container, *connectionsPanelWidgets) {
 		cityLabel:    canvas.NewText("", ConnectedColor),
 		countryLabel: canvas.NewText("", ConnectedColor),
 		pingLabel:    canvas.NewText("", ConnectedColor),
+		dnsLabel:     canvas.NewText("", ConnectedColor),
 		statusLabel:  canvas.NewText(lang.X("connections.disconnected", "Disconnected"), DisconnectedStatusColor),
 		historyBox:   container.NewVBox(),
 	}
@@ -54,6 +58,11 @@ func (u *UI) connectionsPanel() (*fyne.Container, *connectionsPanelWidgets) {
 	widgets.countryLabel.Alignment = fyne.TextAlignCenter
 	widgets.pingLabel.TextSize = 28
 	widgets.pingLabel.Alignment = fyne.TextAlignCenter
+	widgets.dnsLabel.TextSize = 18
+	widgets.dnsLabel.Alignment = fyne.TextAlignCenter
+	dnsRow := container.NewCenter(widgets.dnsLabel)
+	widgets.dnsRow = dnsRow
+	dnsRow.Hide()
 
 	connectBtn := widget.NewButton("", func() {
 		u.runPrivileged(func() {
@@ -79,8 +88,10 @@ func (u *UI) connectionsPanel() (*fyne.Container, *connectionsPanelWidgets) {
 		container.NewCenter(widgets.cityLabel),
 		container.NewCenter(widgets.countryLabel),
 		container.NewCenter(widgets.pingLabel),
+		dnsRow,
 	)
 	centerArea := container.NewCenter(centerContent)
+	widgets.statusBox = centerArea
 
 	historyHeader := widget.NewLabel(lang.X("connections.history.header", "Previously connected to:"))
 	historyHeader.TextStyle.Bold = true
@@ -121,6 +132,13 @@ func (u *UI) refreshConnectionsPanel(w *connectionsPanelWidgets) {
 		w.cityLabel.Color = ConnectedColor
 		w.countryLabel.Color = ConnectedColor
 		w.pingLabel.Color = ConnectedColor
+		if u.vpnmgr.DNSSubstituted() {
+			w.dnsLabel.Text = lang.X("connections.dns_used", "AdGuard DNS used")
+			w.dnsLabel.Color = ConnectedColor
+			w.dnsRow.Show()
+		} else {
+			w.dnsRow.Hide()
+		}
 	} else {
 		w.statusLabel.Text = lang.X("connections.disconnected", "Disconnected")
 		w.statusLabel.Color = DisconnectedStatusColor
@@ -130,11 +148,16 @@ func (u *UI) refreshConnectionsPanel(w *connectionsPanelWidgets) {
 		w.cityLabel.Color = DisconnectedColor
 		w.countryLabel.Color = DisconnectedColor
 		w.pingLabel.Color = DisconnectedColor
+		w.dnsRow.Hide()
 	}
 	w.cityLabel.Refresh()
 	w.countryLabel.Refresh()
 	w.pingLabel.Refresh()
+	w.dnsLabel.Refresh()
 	w.statusLabel.Refresh()
+	if w.statusBox != nil {
+		w.statusBox.Refresh()
+	}
 
 	entries := u.vpnmgr.PreviousConnectionHistory()
 	if len(entries) == 0 {

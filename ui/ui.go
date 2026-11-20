@@ -75,6 +75,7 @@ type trayMenuState struct {
 	location      string
 	exclusionMode commands.SiteExclusionMode
 	domainsCount  int
+	dns           bool
 }
 
 type (
@@ -234,11 +235,13 @@ func (u *UI) updateMenuItems() {
 		return
 	}
 
+	connected := u.vpnmgr.IsConnected()
 	next := trayMenuState{
-		connected:     u.vpnmgr.IsConnected(),
+		connected:     connected,
 		location:      u.vpnmgr.Location(),
 		exclusionMode: u.vpnmgr.SiteExclusionsMode(),
 		domainsCount:  domainsCount,
+		dns:           connected && u.vpnmgr.DNSSubstituted(),
 	}
 	if hasLast && last == next {
 		return
@@ -253,10 +256,14 @@ func (u *UI) updateMenuItems() {
 			if next.exclusionMode == commands.SiteExclusionModeSelective {
 				modeSuffix = "SEL"
 			}
-			items[0].Label = lang.X("tray.status.mode", "{{.Location}} mode:{{.Mode}}", map[string]any{
+			label := lang.X("tray.status.mode", "{{.Location}} mode:{{.Mode}}", map[string]any{
 				"Location": strings.ToUpper(next.location),
 				"Mode":     modeSuffix,
 			})
+			if next.dns {
+				label += " +DNS"
+			}
+			items[0].Label = label
 		} else {
 			menu.Label = lang.X("tray.menu.vpn_disconnected", "VPN disconnected")
 			items[0].Icon = theme.MenuDisconnectedIcon

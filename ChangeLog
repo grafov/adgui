@@ -1,5 +1,16 @@
 2026-11-20  Alexander I.Grafov  <grafov@inet.name>
 
+	* commands/commands.go: DNSSubstituted reports when adgui owns
+	  resolv.conf and DNS management is on. The UI is notified again
+	  after that substitution lands, because the connect callback runs
+	  before syncDNS.
+	* ui/connections_panel.go, ui/ui.go, ui/translation: while connected,
+	  show "AdGuard DNS used" under the location and append " +DNS" to
+	  the tray location line. Nothing is added when resolv.conf was not
+	  replaced or ADGUARD_MANAGE_DNS is off.
+
+2026-11-20  Alexander I.Grafov  <grafov@inet.name>
+
 	* ui/window_lifecycle.go, ui/ui.go: on Wayland, Esc closes the
 	  dashboard and location windows on key release. Closing on key
 	  press armed GLFW's repeat timer, then Close() cleared the

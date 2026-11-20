@@ -44,6 +44,7 @@
     "config.adguirc.header": "Ĉi tiu agordodosiero estis kreita de adgui kun defaŭltaj valoroj.\nMalkomentu la ŝlosilojn kaj agordu la necesajn valorojn.\nMedio-variabloj superregas valorojn en ĉi tiu dosiero.\nSe variablo mankas kaj en la medio kaj en ĉi tiu dosiero, uzeblos la defaŭlta valoro el la kodo.",
     "connections.connect_to": "Konekti al...",
     "connections.disconnected": "Malkonektita",
+    "connections.dns_used": "AdGuard DNS uzata",
     "connections.history.header": "Antaŭe konektita al:",
     "connections.ping.ms": "Ping: {{.Ping}} ms",
     "connections.ping.na": "Ping: ne disp.",

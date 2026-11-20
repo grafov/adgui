@@ -278,6 +278,25 @@ func (v *VPNManager) IsConnected() bool {
 	return v.isConnected
 }
 
+// DNSSubstituted reports whether adgui currently owns the system resolver
+// and DNS management is turned on. Ownership is the resolv.conf backup that
+// Restore puts back on disconnect. The connections panel and the tray status
+// line show the DNS indicator only when this is true. A disabled
+// ADGUARD_MANAGE_DNS, a config read error, or a resolver the CLI configured
+// itself all return false, so nothing is added to the UI.
+func (v *VPNManager) DNSSubstituted() bool {
+	if v == nil {
+		return false
+	}
+	enabled, err := config.AdguardManageDNSEnabled()
+	if err != nil || !enabled {
+		return false
+	}
+	v.dnsMx.Lock()
+	defer v.dnsMx.Unlock()
+	return v.dns != nil && v.dns.Pending()
+}
+
 func (v *VPNManager) SiteExclusionsMode() SiteExclusionMode {
 	v.statemx.Lock()
 	defer v.statemx.Unlock()
@@ -291,6 +310,15 @@ func (v *VPNManager) SetStatusChangeCallback(callback func()) {
 	v.statemx.Lock()
 	defer v.statemx.Unlock()
 	v.onStatusChange = callback
+}
+
+func (v *VPNManager) notifyStatusChange() {
+	v.statemx.Lock()
+	callback := v.onStatusChange
+	v.statemx.Unlock()
+	if callback != nil {
+		callback()
+	}
 }
 
 // RequestStatusCheck asks the status loop to run a check soon without blocking
@@ -483,7 +511,7 @@ func (v *VPNManager) ConnectAuto() {
 		return
 	}
 	if newSeq, ok := v.tryBump(seq); ok {
-		v.syncDNS(output, newSeq)
+		_ = v.syncDNS(output, newSeq)
 	}
 	v.RequestStatusCheck()
 }
@@ -523,7 +551,9 @@ func (v *VPNManager) ConnectToLocation(loc locations.Location) {
 	if strings.Contains(output, statusConnectedTo) {
 		v.applyConnected(loc)
 	}
-	v.syncDNS(output, newSeq)
+	if v.syncDNS(output, newSeq) {
+		v.notifyStatusChange()
+	}
 }
 
 func (v *VPNManager) applyConnected(loc locations.Location) {
@@ -846,7 +876,9 @@ func (v *VPNManager) checkStatus() {
 			fmt.Printf("status check: connected to %s\n", locationName)
 		}
 		v.applyConnected(loc)
-		v.syncDNS(output, seq)
+		if v.syncDNS(output, seq) {
+			v.notifyStatusChange()
+		}
 	}
 }
 
@@ -884,34 +916,37 @@ func (v *VPNManager) tryBump(seen uint64) (uint64, bool) {
 	return v.connSeq, true
 }
 
-func (v *VPNManager) syncDNS(output string, seq uint64) {
+func (v *VPNManager) syncDNS(output string, seq uint64) bool {
 	v.dnsMx.Lock()
 	defer v.dnsMx.Unlock()
 	if v.dns == nil || v.connectionSeq() != seq {
-		return
+		return false
 	}
 	enabled, err := config.AdguardManageDNSEnabled()
 	if err != nil {
 		v.logDNS("config:"+err.Error(), "dns config read error: %v\n", err)
-		return
+		return false
 	}
 	if !enabled {
-		return
+		return false
 	}
 	needed, path := ParseDNSWarning(output)
 	if !needed {
-		return
+		return false
 	}
 	if path == "" {
 		path, err = adguardResolvConfPath()
 		if err != nil {
 			v.logDNS("path:"+err.Error(), "dns path error: %v\n", err)
-			return
+			return false
 		}
 	}
+	wasPending := v.dns.Pending()
 	if err := v.dns.Apply(path); err != nil {
 		v.logDNS("apply:"+err.Error(), "dns apply error: %v\n", err)
+		return false
 	}
+	return !wasPending && v.dns.Pending()
 }
 
 func (v *VPNManager) restoreDNS(seq uint64) {
