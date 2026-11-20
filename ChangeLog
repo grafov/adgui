@@ -1,5 +1,17 @@
 2026-11-20  Alexander I.Grafov  <grafov@inet.name>
 
+	* ui/window_lifecycle.go, ui/ui.go: on Wayland, Esc closes the
+	  dashboard and location windows on key release. Closing on key
+	  press armed GLFW's repeat timer, then Close() cleared the
+	  keyboard focus and the next repeat aborted in _glfwInputKey
+	  (window != NULL). The window-manager close button was already
+	  safe. X11 still hides the window on key press.
+	* go.mod, go.sum: fyne.io/fyne/v2 v2.8.2 and fyne.io/tools v1.7.4.
+	  v2.7.4 SIGSEGV in glfwPollEvents after Esc on Wayland survived
+	  Close(); 2.8 picks Wayland at runtime and ships a newer GLFW.
+
+2026-11-20  Alexander I.Grafov  <grafov@inet.name>
+
 	* Makefile: stamp version and git commit into Wayland and XLibre
 	  release binaries via GOFLAGS tokens that fyne 1.7 reads
 	  (`-ldflags=-X=...`); `fyne build` does not accept go build flags

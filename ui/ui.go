@@ -528,10 +528,8 @@ func (u *UI) Dashboard() string {
 		u.releaseDashboardWindow(window)
 	})
 
-	window.Canvas().SetOnTypedKey(func(k *fyne.KeyEvent) {
-		if k.Name == fyne.KeyEscape && !windowHasOverlays(window) {
-			dismissWindow(window, func() { u.setDashboardShown(false) })
-		}
+	bindEscapeDismiss(window, func() {
+		dismissWindow(window, func() { u.setDashboardShown(false) })
 	})
 
 	window.SetCloseIntercept(func() {
@@ -1289,10 +1287,8 @@ func (u *UI) LocationSelector() {
 	content := container.NewBorder(filterEntry, nil, nil, nil, table)
 	window.SetContent(content)
 
-	window.Canvas().SetOnTypedKey(func(k *fyne.KeyEvent) {
-		if k.Name == fyne.KeyEscape && !windowHasOverlays(window) {
-			dismissWindow(window, func() { u.setLocationShown(false) })
-		}
+	bindEscapeDismiss(window, func() {
+		dismissWindow(window, func() { u.setLocationShown(false) })
 	})
 
 	window.Show()

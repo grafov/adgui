@@ -31,6 +31,37 @@ func dismissWindow(w fyne.Window, onGone func()) {
 	w.Close()
 }
 
+type keyUpCanvas interface {
+	SetOnKeyUp(func(*fyne.KeyEvent))
+}
+
+func bindEscapeDismiss(window fyne.Window, dismiss func()) {
+	if reuseHiddenWindows {
+		window.Canvas().SetOnTypedKey(func(k *fyne.KeyEvent) {
+			if k.Name == fyne.KeyEscape && !windowHasOverlays(window) {
+				dismiss()
+			}
+		})
+		return
+	}
+
+	canvas, ok := window.Canvas().(keyUpCanvas)
+	if !ok {
+		window.Canvas().SetOnTypedKey(func(k *fyne.KeyEvent) {
+			if k.Name == fyne.KeyEscape && !windowHasOverlays(window) {
+				dismiss()
+			}
+		})
+		return
+	}
+
+	canvas.SetOnKeyUp(func(k *fyne.KeyEvent) {
+		if k.Name == fyne.KeyEscape && !windowHasOverlays(window) {
+			dismiss()
+		}
+	})
+}
+
 func windowHasOverlays(w fyne.Window) bool {
 	if w == nil {
 		return false
